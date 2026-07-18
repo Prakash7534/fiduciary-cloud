@@ -25,9 +25,9 @@ export default function ClientSidebar({ clientId, clientName }: { clientId: stri
       items: [
         { label: "Risk Profile",    href: base,                        available: true },
         { label: "Financial Health",href: `${base}/financial-health`,  available: true },
-        { label: "History",         href: `${base}/history`,           available: false },
-        { label: "Trend Analysis",  href: `${base}/trend-analysis`,    available: false },
-        { label: "Advisory Report", href: `${base}/advisory-report`,   available: false },
+        { label: "History",         href: `${base}/history`,           available: true },
+        { label: "Trend Analysis",  href: `${base}/trend-analysis`,    available: true },
+        { label: "Advisory Report", href: `${base}/advisory-report`,   available: true },
       ],
     },
     {

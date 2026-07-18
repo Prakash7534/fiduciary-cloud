@@ -6,6 +6,10 @@ import {
   mapToInvestments, mapToGoals, mapToFamily, mapToRiskAnswers,
   mapToBehaviour, mapToKnowledgeGrid,
 } from "@/lib/pdfExtract";
+import {
+  analyseClient, scoreAnswers, financialPosition,
+  type RiskAnswer, type FinancialFacts, type LoanRow, type InvestmentRow,
+} from "@/lib/riskEngine";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -20,7 +24,7 @@ export async function POST(req: NextRequest) {
   const raw = await extractPdfFields(bytes);
   const clientFields = mapToClient(raw);
 
-  // ---- identity match: PAN first, then name+DOB, then flag ambiguous name-only matches ----
+  // ---- identity match ----
   let clientId: string | null = null;
   let isNew = true;
   let matchNote = "New client";
@@ -44,7 +48,7 @@ export async function POST(req: NextRequest) {
     if (nameMatches && nameMatches.length > 0) {
       return NextResponse.json({
         ambiguous: true,
-        reason: `Name matches ${nameMatches.length} existing client(s) but PAN/DOB couldn't confirm it's the same person.`,
+        reason: `Name matches ${nameMatches.length} existing client(s) but PAN/DOB couldn't confirm.`,
         candidates: nameMatches,
         newFields: clientFields,
       }, { status: 409 });
@@ -63,7 +67,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await supabase.from("financial_facts").insert({ client_id: clientId, ...mapToFinancialFacts(raw) });
+  const factsData = mapToFinancialFacts(raw);
+  await supabase.from("financial_facts").insert({ client_id: clientId, ...factsData });
 
   const answers = mapToRiskAnswers(raw);
   if (answers.length) await supabase.from("risk_answers").insert(answers.map((a) => ({ client_id: clientId, ...a })));
@@ -80,22 +85,47 @@ export async function POST(req: NextRequest) {
   const family = mapToFamily(raw);
   if (family.length) await supabase.from("family_members").insert(family.map((f) => ({ client_id: clientId, ...f })));
 
-  // Behaviour (G7)
   const beh = mapToBehaviour(raw);
   if (beh.beh1 || beh.beh2 || beh.beh3) {
     await supabase.from("behaviour").insert({ client_id: clientId, ...beh });
   }
 
-  // Knowledge grid (G6)
   const kg = mapToKnowledgeGrid(raw);
   if (kg.length) await supabase.from("knowledge_grid").insert(kg.map((r) => ({ client_id: clientId, ...r })));
 
-  // ---- snapshot: append-only history ----
+  // ---- compute snapshot metrics ----
+  const { cap, tol, kn } = scoreAnswers(answers as RiskAnswer[]);
+  const total = cap + tol + kn;
+  const fp = financialPosition(
+    factsData as unknown as FinancialFacts,
+    loans as LoanRow[],
+    invs as InvestmentRow[]
+  );
+  const analysis = analyseClient(
+    { client_id: clientId!, full_name: clientFields.full_name, dob: clientFields.dob ?? null },
+    factsData as unknown as FinancialFacts,
+    answers as RiskAnswer[],
+    loans as LoanRow[],
+    invs as InvestmentRow[],
+    goals as Parameters<typeof analyseClient>[5]
+  );
+
   await supabase.from("snapshots").insert({
     client_id: clientId,
     source_note: isNew ? "Questionnaire load (new client)" : "Questionnaire load (re-upload)",
     raw_data: raw,
     answered_count: answers.length,
+    capacity_score:   cap,
+    tolerance_score:  tol,
+    knowledge_score:  kn,
+    total_score:      total,
+    final_profile:    analysis.finalProfile,
+    income:           fp.income,
+    total_assets:     fp.totalAssets,
+    total_debt:       fp.totalDebt,
+    net_worth:        fp.netWorth,
+    years_to_retirement: analysis.yearsToRetirement,
+    red_flag_count:   analysis.flags.filter(f => f.state === "bad").length,
   });
 
   return NextResponse.json({ clientId, isNew, matchNote, answered: answers.length });

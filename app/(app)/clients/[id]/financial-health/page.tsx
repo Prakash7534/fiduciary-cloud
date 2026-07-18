@@ -149,31 +149,6 @@ export default async function FinancialHealthPage({
         )}
       </div>
 
-      {/* Estate planning */}
-      <div className="bg-white border border-[#CBD9DC] rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-[#175A69] mb-3">
-          Estate planning ({fp.estateScore}/4 in place)
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {fp.estateDocs.map((d) => (
-            <div
-              key={d.name}
-              className={`rounded-lg p-3 text-center text-xs font-medium ${
-                d.status === "Yes"
-                  ? "bg-[#E4F1EA] text-[#2E7D5B]"
-                  : d.status === null
-                  ? "bg-[#DDE6E8] text-[#6B7E86]"
-                  : "bg-[#F8E7E4] text-[#B4463C]"
-              }`}
-            >
-              <div className="font-bold text-sm mb-0.5">
-                {d.status === "Yes" ? "✓" : d.status === null ? "?" : "✗"}
-              </div>
-              {d.name}
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
