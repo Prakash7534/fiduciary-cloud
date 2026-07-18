@@ -16,6 +16,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
     { data: facts },
     { data: universe },
     { data: positions },
+    { data: holdings },
   ] = await Promise.all([
     supabase.from("clients").select("full_name, dob, risk_override, allocation_overrides").eq("client_id", id).single(),
     supabase.from("risk_answers").select("question_id, answer_value").eq("client_id", id),
@@ -23,6 +24,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
     supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
     supabase.from("investment_universe").select("*").order("asset_class").order("category"),
     supabase.from("portfolio_positions").select("*").eq("client_id", id).order("created_at"),
+    supabase.from("portfolio_holdings").select("*").eq("client_id", id).order("added_at"),
   ]);
 
   if (error || !client) notFound();
@@ -54,6 +56,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
       universe={universeRows}
       goals={goals}
       existingPositions={(positions ?? []) as Record<string, unknown>[]}
+      existingHoldings={(holdings ?? []) as Record<string, unknown>[]}
     />
   );
 }
