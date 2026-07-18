@@ -103,7 +103,7 @@ export default async function AssetsPage({
                   </td>
                 </tr>
               ))}
-              <tr className="bg-[#F7F9F9]">
+              <tr className="bg-[#DDE6E8]">
                 <td className="px-3 py-1.5 font-bold text-[#0F3A46]">
                   Financial total
                 </td>

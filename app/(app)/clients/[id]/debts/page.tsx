@@ -184,7 +184,7 @@ export default async function DebtsPage({
                   </td>
                 </tr>
               ))}
-              <tr className="bg-[#F7F9F9]">
+              <tr className="bg-[#DDE6E8]">
                 <td colSpan={2} className="px-3 py-1.5 font-bold text-[#0F3A46]">
                   Total
                 </td>

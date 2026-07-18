@@ -55,7 +55,7 @@ export default async function ClientsPage() {
             </thead>
             <tbody>
               {rows.map(({ client, profile, answered, badFlags }) => (
-                <tr key={client.client_id} className="border-b border-[#E7EFEF] hover:bg-[#F7F9F9]">
+                <tr key={client.client_id} className="border-b border-[#E7EFEF] hover:bg-[#C8D8DB]">
                   <td className="px-3 py-2 font-semibold text-[#0F3A46]">{client.full_name}</td>
                   <td className="px-3 py-2 text-[#0F3A46]">{profile}</td>
                   <td className="px-3 py-2 text-[#0F3A46]">{answered}/19</td>

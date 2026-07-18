@@ -9,7 +9,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-[#F7F9F9]">
+    <div className="min-h-screen bg-[#DDE6E8]">
       <header className="bg-[#0F3A46] text-white px-6 py-3 border-b-2 border-[#C39A38] flex justify-between items-center">
         <div>
           <div className="font-serif text-lg">Fiduciary First</div>
@@ -22,10 +22,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex">
         <aside className="w-60 bg-white border-r border-[#CBD9DC] min-h-[calc(100vh-56px)] p-4 shrink-0">
           <nav className="space-y-0.5">
-            <Link href="/clients" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#E7EFEF] hover:text-[#0F3A46]">
+            <Link href="/clients" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#C8D8DB] hover:text-[#0F3A46]">
               Clients
             </Link>
-            <Link href="/upload" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#E7EFEF] hover:text-[#0F3A46]">
+            <Link href="/upload" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#C8D8DB] hover:text-[#0F3A46]">
               Load Questionnaire
             </Link>
           </nav>

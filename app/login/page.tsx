@@ -27,7 +27,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F7F9F9]">
+    <div className="min-h-screen flex items-center justify-center bg-[#DDE6E8]">
       <div className="w-full max-w-sm bg-white border border-[#CBD9DC] rounded-xl p-8">
         <h1 className="font-serif text-2xl text-[#0F3A46] mb-1">Fiduciary First</h1>
         <p className="text-sm text-[#6B7E86] mb-6">Sign in to your practice dashboard</p>

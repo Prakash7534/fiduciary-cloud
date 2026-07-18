@@ -162,7 +162,7 @@ export default async function FinancialHealthPage({
                 d.status === "Yes"
                   ? "bg-[#E4F1EA] text-[#2E7D5B]"
                   : d.status === null
-                  ? "bg-[#F7F9F9] text-[#6B7E86]"
+                  ? "bg-[#DDE6E8] text-[#6B7E86]"
                   : "bg-[#F8E7E4] text-[#B4463C]"
               }`}
             >
