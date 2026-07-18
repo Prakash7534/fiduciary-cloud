@@ -13,31 +13,34 @@ interface Instrument {
 
 type PriceResult = { instrument_id: string; name: string | null; price?: number; source?: string; error?: string };
 
-// ── AMFI bulk NAV file ──────────────────────────────────────────────────────
+// ── mfapi.in: search ISIN → scheme code → latest NAV ───────────────────────
+async function fetchOneMF(isin: string): Promise<number | null> {
+  try {
+    const searchRes = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(isin)}`, {
+      cache: "no-store",
+    });
+    if (!searchRes.ok) return null;
+    const schemes: { schemeCode: number; schemeName: string }[] = await searchRes.json();
+    if (!schemes.length) return null;
+
+    const navRes = await fetch(`https://api.mfapi.in/mf/${schemes[0].schemeCode}`, {
+      cache: "no-store",
+    });
+    if (!navRes.ok) return null;
+    const navData: { data: { date: string; nav: string }[] } = await navRes.json();
+    const nav = parseFloat(navData.data?.[0]?.nav ?? "");
+    return isNaN(nav) || nav <= 0 ? null : nav;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchAmfiPrices(isins: string[]): Promise<Map<string, number>> {
   const map = new Map<string, number>();
-  try {
-    const res = await fetch("https://www.amfiindia.com/spages/NAVAll.txt", {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return map;
-    const text = await res.text();
-
-    for (const line of text.split("\n")) {
-      const parts = line.split(";");
-      if (parts.length < 6) continue;
-      // Format: SchemeCode;ISIN_Growth;ISIN_Reinvest;SchemeName;NAV;Date
-      const isin1 = parts[1]?.trim();
-      const isin2 = parts[2]?.trim();
-      const nav   = parseFloat(parts[4]?.trim());
-      if (isNaN(nav) || nav <= 0) continue;
-      if (isin1 && isins.includes(isin1)) map.set(isin1, nav);
-      if (isin2 && isins.includes(isin2)) map.set(isin2, nav);
-    }
-  } catch (e) {
-    console.error("AMFI fetch error:", e);
-  }
+  const results = await Promise.allSettled(isins.map(isin => fetchOneMF(isin)));
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled" && r.value != null) map.set(isins[i], r.value);
+  });
   return map;
 }
 
@@ -133,13 +136,16 @@ async function runRefresh() {
     }
   }
 
-  // ── Batch upsert ──
-  if (updates.length) {
-    const { error: upsertError } = await supabase
+  // ── Update each row individually (PK is composite instrument_id+user_id, upsert won't work) ──
+  const updateErrors: string[] = [];
+  await Promise.all(updates.map(async u => {
+    const { error: updateError } = await supabase
       .from("investment_universe")
-      .upsert(updates, { onConflict: "instrument_id" });
-    if (upsertError) throw new Error(upsertError.message);
-  }
+      .update({ current_price: u.current_price, price_date: u.price_date, updated_at: u.updated_at })
+      .eq("instrument_id", u.instrument_id);
+    if (updateError) updateErrors.push(`${u.instrument_id}: ${updateError.message}`);
+  }));
+  if (updateErrors.length) console.error("Update errors:", updateErrors);
 
   return {
     updated: updates.length,
