@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import { scoreAnswers, profileFromAnswers } from "@/lib/riskEngine";
+import { profileFromAnswers } from "@/lib/riskEngine";
 import type { RiskAnswer } from "@/lib/riskEngine";
 import { buildAllocationPlan, type UniverseRow, type GoalInput } from "@/lib/allocationEngine";
 import AssetAllocClient from "./_client";
@@ -20,7 +20,7 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
     supabase.from("risk_answers").select("question_id, answer_value").eq("client_id", id),
     supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
     supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
-    supabase.from("investment_universe").select("*").order("asset_class").order("category"),
+    supabase.from("investment_universe").select("instrument_id, asset_class, category, return_3y, return_5y, expense_ratio").order("asset_class"),
   ]);
 
   if (error || !client) notFound();
@@ -42,6 +42,7 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
 
   const goals = (goalsRaw ?? []) as GoalInput[];
   const universeRows = (universe ?? []) as UniverseRow[];
+  // engine still uses universe for SIP scoring; plan result used by Portfolio Construction
   const plan = buildAllocationPlan(activeProfile, goals, universeRows, monthlySurplus, overrideAlloc ?? undefined);
 
   return (
@@ -51,8 +52,6 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
       plan={plan}
       savedOverrides={savedOv}
       hasGoals={goals.length > 0}
-      hasUniverse={universeRows.length > 0}
-      universe={universeRows}
     />
   );
 }

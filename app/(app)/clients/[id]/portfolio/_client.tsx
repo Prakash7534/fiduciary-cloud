@@ -1,11 +1,11 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { AllocationPlan, UniverseRow, GoalInput, InstrumentPick } from "@/lib/allocationEngine";
-import { scoreInstrument } from "@/lib/allocationEngine";
+import type { AllocationPlan, UniverseRow, GoalInput } from "@/lib/allocationEngine";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Status = "draft" | "pending" | "placed" | "executed";
+type Source = "engine" | "manual";
 
 interface Position {
   id?: string;
@@ -20,6 +20,7 @@ interface Position {
   monthly_sip: number;
   status: Status;
   notes: string;
+  source: Source;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -43,6 +44,64 @@ function fmt(n: number) {
   if (n >= 10_000_000) return "Rs." + (n / 10_000_000).toFixed(2) + " Cr";
   if (n >= 100_000)    return "Rs." + (n / 100_000).toFixed(2) + " L";
   return "Rs." + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+}
+
+// ── Instrument Swap Modal ─────────────────────────────────────────────────────
+function SwapInstrumentModal({
+  universe, currentId, assetClass, onSwap, onClose,
+}: {
+  universe: UniverseRow[];
+  currentId: string;
+  assetClass: string;
+  onSwap: (u: UniverseRow) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const eligible = universe.filter(u =>
+    (!assetClass || u.asset_class === assetClass) &&
+    (!search || (u.name ?? u.instrument_id).toLowerCase().includes(search.toLowerCase()))
+  );
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh]">
+        <div className="px-5 py-4 border-b border-[#E7EFEF] flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-[#0F3A46] text-sm">Swap instrument</h3>
+            <p className="text-[10px] text-[#6B7E86] mt-0.5">Showing {assetClass} instruments from universe</p>
+          </div>
+          <button onClick={onClose} className="text-[#6B7E86] hover:text-[#0F3A46]">✕</button>
+        </div>
+        <div className="px-4 py-3 border-b border-[#E7EFEF]">
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name..."
+            className="w-full border border-[#CBD9DC] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#175A69]" />
+        </div>
+        <div className="flex-1 overflow-y-auto divide-y divide-[#F0F5F6]">
+          {eligible.length === 0 && <p className="text-sm text-[#6B7E86] p-4">No instruments found.</p>}
+          {eligible.map(u => (
+            <button key={u.instrument_id} onClick={() => { onSwap(u); onClose(); }}
+              className={"w-full text-left px-4 py-3 hover:bg-[#F0F5F6] flex items-center gap-3 " + (u.instrument_id === currentId ? "bg-[#EBF3F5]" : "")}>
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: AC_COLOR[u.asset_class ?? ""] ?? "#999" }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-[#0F3A46] font-medium truncate">{u.name ?? u.instrument_id}</div>
+                {u.category && <div className="text-[10px] text-[#6B7E86]">{u.category}</div>}
+              </div>
+              <div className="text-right shrink-0">
+                {u.return_5y != null && <div className="text-xs text-[#2E7D5B] font-medium">{u.return_5y}% 5Y</div>}
+                {u.expense_ratio != null && <div className="text-[10px] text-[#6B7E86]">ER {u.expense_ratio}%</div>}
+              </div>
+              {u.instrument_id === currentId && (
+                <span className="text-[10px] text-[#175A69] font-medium ml-1">current</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="px-5 py-3 border-t border-[#E7EFEF]">
+          <button onClick={onClose} className="w-full text-sm text-[#6B7E86] hover:text-[#0F3A46]">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Add Position Modal ────────────────────────────────────────────────────────
@@ -81,6 +140,7 @@ function AddPositionModal({
       monthly_sip: sip,
       status: "draft",
       notes: "",
+      source: "manual",
     });
     onClose();
   };
@@ -90,10 +150,9 @@ function AddPositionModal({
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]">
         <div className="px-6 py-4 border-b border-[#E7EFEF] flex items-center justify-between">
           <h3 className="font-semibold text-[#0F3A46]">Add Position</h3>
-          <button onClick={onClose} className="text-[#6B7E86] hover:text-[#0F3A46] text-xl">x</button>
+          <button onClick={onClose} className="text-[#6B7E86] hover:text-[#0F3A46] text-xl leading-none">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Instrument search */}
           <div>
             <label className="text-xs font-medium text-[#0F3A46] mb-1 block">Instrument</label>
             <input value={search} onChange={e => { setSearch(e.target.value); setSelected(null); }}
@@ -121,9 +180,7 @@ function AddPositionModal({
               </div>
             )}
           </div>
-
           <div className="grid grid-cols-2 gap-3">
-            {/* Bucket */}
             <div>
               <label className="text-xs font-medium text-[#0F3A46] mb-1 block">Bucket</label>
               <select value={bucket} onChange={e => setBucket(e.target.value)}
@@ -134,7 +191,6 @@ function AddPositionModal({
                 <option value="blend">Blend</option>
               </select>
             </div>
-            {/* Goal */}
             <div>
               <label className="text-xs font-medium text-[#0F3A46] mb-1 block">Goal (optional)</label>
               <select value={goalId} onChange={e => setGoalId(e.target.value)}
@@ -145,23 +201,20 @@ function AddPositionModal({
                 ))}
               </select>
             </div>
-            {/* Lump sum */}
             <div>
               <label className="text-xs font-medium text-[#0F3A46] mb-1 block">Lump sum (Rs.)</label>
               <input type="number" min={0} value={lumpsum} onChange={e => setLumpsum(Number(e.target.value))}
-                className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-sm text-[#0F3A46] focus:outline-none focus:border-[#175A69]" />
+                className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#175A69]" />
             </div>
-            {/* SIP */}
             <div>
               <label className="text-xs font-medium text-[#0F3A46] mb-1 block">Monthly SIP (Rs.)</label>
               <input type="number" min={0} value={sip} onChange={e => setSip(Number(e.target.value))}
-                className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-sm text-[#0F3A46] focus:outline-none focus:border-[#175A69]" />
+                className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#175A69]" />
             </div>
-            {/* Alloc % */}
             <div>
               <label className="text-xs font-medium text-[#0F3A46] mb-1 block">Allocation %</label>
               <input type="number" min={0} max={100} value={allocPct} onChange={e => setAllocPct(Number(e.target.value))}
-                className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-sm text-[#0F3A46] focus:outline-none focus:border-[#175A69]" />
+                className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#175A69]" />
             </div>
           </div>
         </div>
@@ -191,30 +244,30 @@ export default function PortfolioClient({
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  // Initialise positions from DB or empty
   const initPositions = (): Position[] =>
     existingPositions.map(p => ({
       id: p.id as string,
       instrument_id: p.instrument_id as string,
-      instrument_name: p.instrument_name as string ?? "",
-      asset_class: p.asset_class as string ?? "",
+      instrument_name: (p.instrument_name as string) ?? "",
+      asset_class: (p.asset_class as string) ?? "",
       category: p.category as string | null,
-      bucket: p.bucket as string ?? "long",
+      bucket: (p.bucket as string) ?? "long",
       goal_id: p.goal_id as string | null,
       allocation_pct: Number(p.allocation_pct ?? 0),
       lumpsum_amount: Number(p.lumpsum_amount ?? 0),
       monthly_sip: Number(p.monthly_sip ?? 0),
       status: (p.status as Status) ?? "draft",
-      notes: p.notes as string ?? "",
+      notes: (p.notes as string) ?? "",
+      source: (p.source as Source) ?? "manual",
     }));
 
   const [positions, setPositions] = useState<Position[]>(initPositions);
   const [showAdd, setShowAdd] = useState(false);
+  const [swapTarget, setSwapTarget] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [editingNotes, setEditingNotes] = useState<string | null>(null);
 
-  // Build positions from allocation plan
+  // Build positions from allocation plan — engine picks instruments
   const buildFromPlan = () => {
     const newPositions: Position[] = [];
     for (const bucket of plan.buckets) {
@@ -231,6 +284,7 @@ export default function PortfolioClient({
           monthly_sip: inst.suggested_sip,
           status: "draft",
           notes: "",
+          source: "engine",
         });
       }
     }
@@ -241,6 +295,16 @@ export default function PortfolioClient({
   const updatePosition = (idx: number, updates: Partial<Position>) => {
     setPositions(prev => prev.map((p, i) => i === idx ? { ...p, ...updates } : p));
     setSaved(false);
+  };
+
+  const swapInstrument = (idx: number, u: UniverseRow) => {
+    updatePosition(idx, {
+      instrument_id: u.instrument_id,
+      instrument_name: u.name ?? u.instrument_id,
+      asset_class: u.asset_class ?? "",
+      category: u.category,
+      source: "manual",
+    });
   };
 
   const removePosition = (idx: number) => {
@@ -255,11 +319,8 @@ export default function PortfolioClient({
 
   const savePortfolio = async () => {
     setSaving(true);
-    const rows = positions.map(({ id, ...p }) => ({
-      ...p,
-      ...(id ? { id } : {}),
-    }));
-    await fetch(`/api/clients/${clientId}/portfolio`, {
+    const rows = positions.map(({ id, ...p }) => ({ ...p, ...(id ? { id } : {}) }));
+    await fetch("/api/clients/" + clientId + "/portfolio", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(rows),
@@ -269,7 +330,6 @@ export default function PortfolioClient({
     startTransition(() => router.refresh());
   };
 
-  // Summary stats
   const totalLumpsum = positions.reduce((s, p) => s + p.lumpsum_amount, 0);
   const totalSIP = positions.reduce((s, p) => s + p.monthly_sip, 0);
   const totalAllocPct = positions.reduce((s, p) => s + p.allocation_pct, 0);
@@ -277,12 +337,15 @@ export default function PortfolioClient({
     acc[p.status] = (acc[p.status] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
   const byBucket = ["short", "medium", "long", "blend"].map(b => ({
     bucket: b,
     positions: positions.filter(p => p.bucket === b),
     totalSIP: positions.filter(p => p.bucket === b).reduce((s, p) => s + p.monthly_sip, 0),
     totalLump: positions.filter(p => p.bucket === b).reduce((s, p) => s + p.lumpsum_amount, 0),
   })).filter(b => b.positions.length > 0);
+
+  const swapPos = swapTarget !== null ? positions[swapTarget] : null;
 
   return (
     <div className="space-y-5">
@@ -292,7 +355,7 @@ export default function PortfolioClient({
           <h1 className="text-xl font-semibold text-[#0F3A46]">Portfolio Construction</h1>
           <p className="text-xs text-[#6B7E86] mt-0.5">
             {clientName} · Profile: <span className="font-medium text-[#0F3A46]">{plan.profile}</span>
-            {positions.length > 0 && ` · ${positions.length} position${positions.length > 1 ? "s" : ""}`}
+            {positions.length > 0 && " · " + positions.length + " position" + (positions.length > 1 ? "s" : "")}
           </p>
         </div>
         <div className="flex gap-2">
@@ -311,14 +374,27 @@ export default function PortfolioClient({
         </div>
       </div>
 
+      {/* Info strip */}
+      <div className="bg-[#EBF3F5] border border-[#C8D8DB] rounded-lg px-4 py-2.5 text-xs text-[#1A4D6A] flex items-center gap-2">
+        <span className="font-medium">How it works:</span>
+        <span className="text-[#2C6070]">
+          "Build from plan" auto-populates positions using engine-scored instruments. You can swap any instrument from the Investment Universe or add positions manually.
+        </span>
+      </div>
+
       {/* Summary cards */}
       <div className="grid grid-cols-5 gap-3">
         {[
-          { label: "Positions", value: String(positions.length), sub: "total instruments" },
-          { label: "Total lump sum", value: fmt(totalLumpsum), sub: "one-time investment" },
-          { label: "Total monthly SIP", value: fmt(totalSIP) + "/mo", sub: "recurring" },
-          { label: "Plan SIP", value: fmt(plan.totalMonthlySIP) + "/mo", sub: "from allocation engine" },
-          { label: "Allocation total", value: totalAllocPct.toFixed(0) + "%", sub: totalAllocPct === 100 ? "balanced ✓" : "adjust to 100%", red: totalAllocPct !== 100 && positions.length > 0 },
+          { label: "Positions",       value: String(positions.length),         sub: "total instruments" },
+          { label: "Total lump sum",  value: fmt(totalLumpsum) + "",           sub: "one-time" },
+          { label: "Total SIP",       value: fmt(totalSIP) + "/mo",            sub: "recurring" },
+          { label: "Plan SIP",        value: fmt(plan.totalMonthlySIP) + "/mo",sub: "from allocation engine" },
+          {
+            label: "Alloc total",
+            value: totalAllocPct.toFixed(0) + "%",
+            sub: totalAllocPct === 100 ? "balanced" : "adjust to 100%",
+            red: totalAllocPct !== 100 && positions.length > 0,
+          },
         ].map(c => (
           <div key={c.label} className="bg-white border border-[#CBD9DC] rounded-xl p-4">
             <div className="text-xs text-[#6B7E86] mb-1">{c.label}</div>
@@ -328,7 +404,7 @@ export default function PortfolioClient({
         ))}
       </div>
 
-      {/* Status summary row */}
+      {/* Status pills */}
       {positions.length > 0 && (
         <div className="flex gap-2 flex-wrap">
           {(["draft", "pending", "placed", "executed"] as Status[]).map(s => {
@@ -341,6 +417,9 @@ export default function PortfolioClient({
               </span>
             );
           })}
+          <span className="text-xs px-2.5 py-1 rounded-full border font-medium bg-[#EBF3F5] text-[#1A4D6A] border-[#2C7DA0]">
+            {positions.filter(p => p.source === "engine").length} engine · {positions.filter(p => p.source === "manual").length} manual
+          </span>
         </div>
       )}
 
@@ -393,11 +472,18 @@ export default function PortfolioClient({
                 return (
                   <tr key={pos.instrument_id + globalIdx} className="border-b border-[#E7EFEF] hover:bg-[#FAFCFC]">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-[#0F3A46]">{pos.instrument_name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-[#0F3A46] truncate max-w-[160px]">{pos.instrument_name}</span>
+                        {pos.source === "engine" && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#EBF3F5] text-[#1A4D6A] border border-[#BDD4DB] shrink-0 font-medium">
+                            engine
+                          </span>
+                        )}
+                      </div>
                       {pos.category && <div className="text-[10px] text-[#6B7E86]">{pos.category}</div>}
                       {pos.goal_id && (
                         <div className="text-[10px] text-[#175A69]">
-                          Goal: {goals.find(g => g.goal_id === pos.goal_id)?.goal_name ?? pos.goal_id}
+                          {goals.find(g => g.goal_id === pos.goal_id)?.goal_name ?? pos.goal_id}
                         </div>
                       )}
                     </td>
@@ -407,26 +493,22 @@ export default function PortfolioClient({
                         {pos.asset_class}
                       </span>
                     </td>
-                    {/* Editable allocation % */}
                     <td className="px-4 py-3 text-right">
                       <input type="number" min={0} max={100} value={pos.allocation_pct}
                         onChange={e => updatePosition(globalIdx, { allocation_pct: Number(e.target.value) })}
-                        className="w-14 text-right border border-[#E7EFEF] rounded px-1 py-0.5 text-sm text-[#0F3A46] focus:outline-none focus:border-[#175A69]" />
+                        className="w-14 text-right border border-[#E7EFEF] rounded px-1 py-0.5 text-sm focus:outline-none focus:border-[#175A69]" />
                       <span className="text-[#6B7E86] ml-0.5">%</span>
                     </td>
-                    {/* Editable lump sum */}
                     <td className="px-4 py-3 text-right">
                       <input type="number" min={0} value={pos.lumpsum_amount}
                         onChange={e => updatePosition(globalIdx, { lumpsum_amount: Number(e.target.value) })}
-                        className="w-24 text-right border border-[#E7EFEF] rounded px-1 py-0.5 text-sm text-[#0F3A46] focus:outline-none focus:border-[#175A69]" />
+                        className="w-24 text-right border border-[#E7EFEF] rounded px-1 py-0.5 text-sm focus:outline-none focus:border-[#175A69]" />
                     </td>
-                    {/* Editable SIP */}
                     <td className="px-4 py-3 text-right">
                       <input type="number" min={0} value={pos.monthly_sip}
                         onChange={e => updatePosition(globalIdx, { monthly_sip: Number(e.target.value) })}
-                        className="w-24 text-right border border-[#E7EFEF] rounded px-1 py-0.5 text-sm text-[#0F3A46] focus:outline-none focus:border-[#175A69]" />
+                        className="w-24 text-right border border-[#E7EFEF] rounded px-1 py-0.5 text-sm focus:outline-none focus:border-[#175A69]" />
                     </td>
-                    {/* Status dropdown */}
                     <td className="px-4 py-3 text-center">
                       <select value={pos.status}
                         onChange={e => updatePosition(globalIdx, { status: e.target.value as Status })}
@@ -438,10 +520,16 @@ export default function PortfolioClient({
                       </select>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => removePosition(globalIdx)}
-                        className="text-xs text-[#B4463C] hover:underline">
-                        Remove
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => setSwapTarget(globalIdx)}
+                          className="text-xs text-[#175A69] hover:underline">
+                          Swap
+                        </button>
+                        <button onClick={() => removePosition(globalIdx)}
+                          className="text-xs text-[#B4463C] hover:underline">
+                          Remove
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -451,14 +539,14 @@ export default function PortfolioClient({
         </div>
       ))}
 
-      {/* Allocation plan reference */}
+      {/* SAA reference panel */}
       {positions.length > 0 && (
         <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-[#E7EFEF] bg-[#F5F9FA]">
-            <h2 className="text-sm font-semibold text-[#0F3A46]">Allocation plan reference</h2>
-            <p className="text-xs text-[#6B7E86] mt-0.5">Engine-recommended SAA vs current portfolio</p>
+            <h2 className="text-sm font-semibold text-[#0F3A46]">SAA reference</h2>
+            <p className="text-xs text-[#6B7E86] mt-0.5">Engine-recommended SAA vs current portfolio allocation %</p>
           </div>
-          <div className="p-5 grid grid-cols-5 gap-3">
+          <div className="p-5 grid grid-cols-6 gap-3">
             {Object.entries(plan.assetAllocation).map(([ac, pct]) => {
               const portfolioPct = positions
                 .filter(p => p.asset_class === ac)
@@ -467,12 +555,12 @@ export default function PortfolioClient({
               return (
                 <div key={ac} className="text-center">
                   <div className="w-2.5 h-2.5 rounded-full mx-auto mb-1" style={{ background: AC_COLOR[ac] ?? "#999" }} />
-                  <div className="text-xs font-medium text-[#0F3A46]">{ac}</div>
+                  <div className="text-xs font-medium text-[#0F3A46] truncate">{ac}</div>
                   <div className="text-sm font-semibold text-[#0F3A46] mt-0.5">{pct}%</div>
                   <div className="text-[10px] text-[#6B7E86]">target</div>
                   {portfolioPct > 0 && (
                     <div className={"text-[10px] font-medium mt-0.5 " + (Math.abs(diff) <= 2 ? "text-[#2E7D5B]" : "text-[#B4463C]")}>
-                      {portfolioPct}% actual{diff !== 0 ? " (" + (diff > 0 ? "+" : "") + diff.toFixed(0) + ")" : ""}
+                      {portfolioPct}% {diff !== 0 ? "(" + (diff > 0 ? "+" : "") + diff.toFixed(0) + ")" : "✓"}
                     </div>
                   )}
                 </div>
@@ -482,13 +570,17 @@ export default function PortfolioClient({
         </div>
       )}
 
-      {/* Add position modal */}
+      {/* Modals */}
       {showAdd && (
-        <AddPositionModal
+        <AddPositionModal universe={universe} goals={goals} onAdd={addPosition} onClose={() => setShowAdd(false)} />
+      )}
+      {swapTarget !== null && swapPos && (
+        <SwapInstrumentModal
           universe={universe}
-          goals={goals}
-          onAdd={addPosition}
-          onClose={() => setShowAdd(false)}
+          currentId={swapPos.instrument_id}
+          assetClass={swapPos.asset_class}
+          onSwap={u => swapInstrument(swapTarget, u)}
+          onClose={() => setSwapTarget(null)}
         />
       )}
     </div>
