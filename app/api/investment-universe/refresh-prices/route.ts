@@ -1,6 +1,6 @@
 // app/api/investment-universe/refresh-prices/route.ts
 // Called by: UI "Refresh Prices" button (POST) + Vercel cron (GET, daily 4pm IST)
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 interface Instrument {
@@ -72,7 +72,9 @@ async function fetchYahooPrices(tickers: string[]): Promise<Map<string, number>>
 }
 
 async function runRefresh() {
-  const supabase = await createClient();
+  // Use service role for writes (cron runs without user session)
+  // Use regular client to read (same data either way since RLS is now open)
+  const supabase = createServiceClient();
   const { data: instruments, error } = await supabase
     .from("investment_universe")
     .select("instrument_id, name, instrument_type, ticker, isin");

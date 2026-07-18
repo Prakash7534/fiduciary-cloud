@@ -29,3 +29,14 @@ export async function createClient() {
     }
   );
 }
+
+// Service-role client — bypasses RLS. Use ONLY in server-side cron/admin routes,
+// never expose to the browser.
+export function createServiceClient() {
+  const { createClient: createSupabaseClient } = require("@supabase/supabase-js");
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
