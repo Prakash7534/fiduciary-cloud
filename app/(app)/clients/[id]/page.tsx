@@ -6,6 +6,7 @@ import {
   type RiskAnswer, type LoanRow, type InvestmentRow, type GoalRow,
 } from "@/lib/riskEngine";
 import ScoreChart from "./_components/ScoreChart";
+import OverrideSelector from "./_components/OverrideSelector";
 
 // Score → band label (total 19-95 scale)
 function totalBand(total: number): string {
@@ -189,16 +190,11 @@ export default async function RiskProfilePage({ params }: { params: Promise<{ id
               Diverge — discussed with client. Lower of capacity vs willingness governs per SEBI guidelines.
             </p>
           )}
-          <div className="mt-4 bg-[#0F3A46] rounded-lg px-4 py-3 flex items-center justify-between">
-            <div>
-              <div className="text-[9px] tracking-widest text-[#BFD3D8] uppercase mb-0.5">Final risk profile</div>
-              <div className="font-serif text-lg text-[#E8DBB8]">{a.finalProfile}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-[9px] text-[#BFD3D8] uppercase tracking-wide mb-0.5">Equity allocation</div>
-              <div className="text-2xl font-bold text-white">{a.alloc[0]}%</div>
-            </div>
-          </div>
+          <OverrideSelector
+            clientId={id}
+            currentOverride={client.risk_override ?? null}
+            computedProfile={a.finalProfile}
+          />
         </div>
 
         {/* Model asset allocation */}
