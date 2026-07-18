@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import { analyseClient, scoreAnswers } from "@/lib/riskEngine";
+import { scoreAnswers, profileFromAnswers } from "@/lib/riskEngine";
 import type { RiskAnswer } from "@/lib/riskEngine";
 import { buildAllocationPlan, type UniverseRow, type GoalInput } from "@/lib/allocationEngine";
 import AssetAllocClient from "./_client";
@@ -29,15 +29,15 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
     question_num: r.question_id as number,
     answer: r.answer_value as "A" | "B" | "C" | "D" | "E",
   }));
-  const scores  = scoreAnswers(answers);
-  const analysis = analyseClient(scores, client.dob ?? undefined);
+
+  const engineProfile = profileFromAnswers(answers);
+  const activeProfile = client.risk_override ?? engineProfile;
+  const overrideAlloc = (client.allocation_overrides as { asset_class?: Record<string, number> } | null)?.asset_class ?? null;
+
   const monthlySurplus = Math.max(0,
     ((facts?.income_self ?? 0) + (facts?.income_spouse ?? 0) + (facts?.income_other ?? 0)) / 12
     - (facts?.expenses_annual ?? 0) / 12
   );
-
-  const activeProfile = client.risk_override ?? analysis.finalProfile;
-  const overrideAlloc = (client.allocation_overrides as { asset_class?: Record<string, number> } | null)?.asset_class ?? null;
 
   const goals = (goalsRaw ?? []) as GoalInput[];
   const plan  = buildAllocationPlan(activeProfile, goals, (universe ?? []) as UniverseRow[], monthlySurplus, overrideAlloc ?? undefined);

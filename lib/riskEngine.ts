@@ -707,3 +707,12 @@ export function insuranceAnalysis(
     healthCover, employerCover, coversHeld, nomineesUpdated, notes,
   };
 }
+
+// Lightweight profile derivation — only needs answers, no full client data
+export function profileFromAnswers(answers: RiskAnswer[]): string {
+  const { cap, tol } = scoreAnswers(answers);
+  const capR = rank(cap / 40);
+  const tolR = rank(tol / 35);
+  const govR = Math.min(capR, tolR);
+  return CATEGORIES[Math.max(0, govR - 1)];
+}
