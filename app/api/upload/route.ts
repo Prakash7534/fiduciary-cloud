@@ -8,7 +8,7 @@ import {
 } from "@/lib/pdfExtract";
 import {
   analyseClient, scoreAnswers, financialPosition,
-  type RiskAnswer, type FinancialFacts, type LoanRow, type InvestmentRow,
+  type RiskAnswer, type FinancialFacts, type LoanRow, type InvestmentRow, type GoalRow,
 } from "@/lib/riskEngine";
 
 export async function POST(req: NextRequest) {
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     answers as RiskAnswer[],
     loans as LoanRow[],
     invs as InvestmentRow[],
-    goals as Parameters<typeof analyseClient>[5]
+    goals as unknown as GoalRow[]
   );
 
   await supabase.from("snapshots").insert({
