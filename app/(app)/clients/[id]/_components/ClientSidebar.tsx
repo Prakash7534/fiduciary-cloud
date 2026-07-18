@@ -43,7 +43,7 @@ export default function ClientSidebar({ clientId, clientName }: { clientId: stri
       items: [
         { label: "Goal Calculator",    href: `${base}/goals`,          available: true },
         { label: "Goal Solver",        href: `${base}/goal-solver`,    available: true },
-        { label: "Asset Allocation",   href: `${base}/asset-alloc`,    available: false },
+        { label: "Asset Allocation",   href: `${base}/asset-alloc`,    available: true },
         { label: "Suitability Matching",href:`${base}/suitability`,    available: false },
       ],
     },
