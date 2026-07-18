@@ -1,6 +1,6 @@
 // app/(app)/(main)/investment-universe/_client.tsx
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 export interface Instrument {
@@ -53,6 +53,93 @@ function fmt(n: number | null | undefined) {
   return n >= 1000 ? `₹${n.toLocaleString("en-IN")}` : `₹${n}`;
 }
 
+interface LookupResult {
+  instrument_id: string; name: string; instrument_type: string;
+  isin?: string; ticker?: string; category?: string; asset_class?: string; exchange?: string;
+}
+
+function SearchBox({ onSelect }: { onSelect: (r: LookupResult & { current_price?: number }) => void }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<LookupResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = (val: string) => {
+    setQ(val);
+    if (timer.current) clearTimeout(timer.current);
+    if (val.length < 2) { setResults([]); setOpen(false); return; }
+    timer.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/investment-universe/lookup?q=${encodeURIComponent(val)}`);
+        const data: LookupResult[] = await res.json();
+        setResults(data);
+        setOpen(true);
+      } catch { setResults([]); }
+      setLoading(false);
+    }, 350);
+  };
+
+  const pick = async (r: LookupResult) => {
+    setOpen(false); setQ(""); setResults([]);
+    let enriched: LookupResult & { current_price?: number } = r;
+    // For MFs, fetch ISIN + NAV from mfapi
+    if (r.instrument_type === "MF" && r.ticker) {
+      try {
+        const res = await fetch(`/api/investment-universe/lookup?q=&details=${r.ticker}`);
+        const det: { isin?: string; nav?: number; category?: string } = await res.json();
+        enriched = {
+          ...r,
+          isin: det.isin ?? r.isin,
+          current_price: det.nav,
+          category: det.category ?? r.category,
+          instrument_id: det.isin ?? r.instrument_id, // use ISIN as ID for MFs
+        };
+      } catch { /* use as-is */ }
+    }
+    onSelect(enriched);
+  };
+
+  return (
+    <div className="relative">
+      <label className="text-xs text-[#6B7E86] block mb-1">🔍 Search to auto-fill (fund name, stock name, ticker, ISIN…)</label>
+      <div className="relative">
+        <input value={q} onChange={e => search(e.target.value)}
+          placeholder="e.g. HDFC Top 100, Reliance, NIFTYBEES…"
+          className="w-full border-2 border-[#175A69] rounded-lg px-3 py-2 text-[#0F3A46] focus:outline-none focus:ring-2 focus:ring-[#175A69]/30" />
+        {loading && <span className="absolute right-3 top-2.5 text-[#6B7E86] text-xs">Searching…</span>}
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-[#CBD9DC] rounded-xl shadow-lg overflow-hidden">
+          {results.map(r => (
+            <button key={r.instrument_id} onClick={() => pick(r)}
+              className="w-full text-left px-4 py-2.5 hover:bg-[#F0F7F8] border-b border-[#E7EFEF] last:border-0 transition-colors">
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${r.instrument_type === "MF" ? "bg-[#E8EDF7] text-[#2C4A8C]" : r.instrument_type === "ETF" ? "bg-[#E8F0F7] text-[#1A5276]" : "bg-[#F0EBF7] text-[#5B2C8C]"}`}>
+                  {r.instrument_type}
+                </span>
+                <span className="text-sm font-medium text-[#0F3A46] truncate">{r.name}</span>
+              </div>
+              <div className="text-[10px] text-[#6B7E86] mt-0.5 pl-0.5 space-x-2">
+                {r.ticker && <span>Ticker: {r.ticker}</span>}
+                {r.isin && <span>ISIN: {r.isin}</span>}
+                {r.category && <span>{r.category}</span>}
+                {r.exchange && <span>{r.exchange}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && results.length === 0 && !loading && q.length >= 2 && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-[#CBD9DC] rounded-xl shadow-lg px-4 py-3 text-sm text-[#6B7E86]">
+          No matches found — fill fields manually below.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EditModal({ item, onClose, onSave }: {
   item: Partial<Instrument>;
   onClose: () => void;
@@ -60,8 +147,26 @@ function EditModal({ item, onClose, onSave }: {
 }) {
   const [d, setD] = useState<Partial<Instrument>>(item);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const isNew = !item.instrument_id;
   const set = (k: keyof Instrument, v: string | number | boolean | null) =>
     setD(p => ({ ...p, [k]: v === "" ? null : v }));
+
+  const autofill = (r: LookupResult & { current_price?: number }) => {
+    setD(prev => ({
+      ...prev,
+      instrument_id: r.instrument_id,
+      name: r.name,
+      instrument_type: r.instrument_type as string,
+      isin: r.isin ?? prev.isin ?? null,
+      ticker: r.instrument_type !== "MF" ? (r.ticker ?? prev.ticker ?? null) : null,
+      asset_class: r.asset_class ?? prev.asset_class ?? "Equity",
+      category: r.category ?? prev.category ?? null,
+      exchange: r.exchange ?? prev.exchange ?? null,
+      current_price: r.current_price ?? prev.current_price ?? null,
+      price_date: r.current_price ? new Date().toISOString().slice(0, 10) : prev.price_date ?? null,
+    }));
+  };
 
   const cats = (CATEGORIES as Record<string, string[]>)[d.asset_class ?? ""] ?? [];
 
@@ -69,16 +174,25 @@ function EditModal({ item, onClose, onSave }: {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#CBD9DC]">
-          <h2 className="font-semibold text-[#0F3A46]">{item.instrument_id ? "Edit instrument" : "Add instrument"}</h2>
+          <h2 className="font-semibold text-[#0F3A46]">{isNew ? "Add instrument" : "Edit instrument"}</h2>
           <button onClick={onClose} className="text-[#6B7E86] hover:text-[#0F3A46] text-xl">✕</button>
         </div>
-        <div className="p-6 grid grid-cols-2 gap-4 text-sm">
+        <div className="p-6 space-y-5 text-sm">
+          {/* Search autocomplete — only for new instruments */}
+          {isNew && (
+            <div className="bg-[#F0F7F8] border border-[#C0D8DB] rounded-xl p-4">
+              <SearchBox onSelect={autofill} />
+              <p className="text-[10px] text-[#6B7E86] mt-2">Select a result to auto-fill the fields below, then review and save.</p>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
           {/* ID */}
           <div className="col-span-2">
             <label className="text-xs text-[#6B7E86] block mb-1">Instrument ID <span className="text-[#B4463C]">*</span></label>
             <input value={d.instrument_id ?? ""} onChange={e => set("instrument_id", e.target.value)}
-              disabled={!!item.user_id}
-              className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46] disabled:bg-[#F5F9FA] disabled:text-[#6B7E86]" placeholder="e.g. NIFTY50-IDX" />
+              disabled={!isNew}
+              className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46] disabled:bg-[#F5F9FA] disabled:text-[#6B7E86]"
+              placeholder="Auto-filled from search, or type e.g. NIFTY50-IDX" />
           </div>
           {/* Name */}
           <div className="col-span-2">
@@ -207,10 +321,21 @@ function EditModal({ item, onClose, onSave }: {
             <textarea value={d.notes ?? ""} onChange={e => set("notes", e.target.value)} rows={2}
               className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46] resize-none" />
           </div>
-        </div>
+          </div>{/* end grid */}
+        </div>{/* end p-6 space-y-5 */}
+        {saveError && (
+          <div className="mx-6 mb-2 px-4 py-2.5 bg-[#F8E7E4] border border-[#E8C0BB] rounded-lg text-sm text-[#B4463C]">
+            ⚠ {saveError}
+          </div>
+        )}
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-[#CBD9DC]">
           <button onClick={onClose} className="px-4 py-2 text-sm text-[#6B7E86] hover:text-[#0F3A46]">Cancel</button>
-          <button onClick={async () => { setSaving(true); await onSave(d); setSaving(false); }}
+          <button onClick={async () => {
+              setSaving(true); setSaveError(null);
+              try { await onSave(d); }
+              catch (e) { setSaveError(String(e)); }
+              setSaving(false);
+            }}
             disabled={saving || !d.instrument_id || !d.name}
             className="px-4 py-2 bg-[#0F3A46] text-white text-sm font-medium rounded-lg hover:bg-[#175A69] disabled:opacity-50">
             {saving ? "Saving…" : "Save"}
@@ -292,12 +417,18 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
   };
 
   const handleSave = async (d: Partial<Instrument>) => {
-    const isNew = !initialData.find(i => i.instrument_id === d.instrument_id);
-    await apiCall("/api/investment-universe", isNew ? "POST" : "PUT", d);
-    startTransition(() => router.refresh());
+    const isNew = !data.find(i => i.instrument_id === d.instrument_id);
+    const res = await fetch("/api/investment-universe", {
+      method: isNew ? "POST" : "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(d),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) throw new Error(json.error ?? "Save failed");
     setEditItem(null);
     // Optimistic local update
     setData(prev => isNew ? [...prev, d as Instrument] : prev.map(i => i.instrument_id === d.instrument_id ? { ...i, ...d } : i));
+    startTransition(() => router.refresh());
   };
 
   const handleDelete = async (id: string) => {
