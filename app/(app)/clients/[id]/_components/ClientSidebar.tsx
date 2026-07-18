@@ -14,10 +14,10 @@ export default function ClientSidebar({ clientId, clientName }: { clientId: stri
     {
       title: "CLIENT PROFILE",
       items: [
-        { label: "Personal & KYC",           href: `${base}/personal`,     available: false },
-        { label: "Family",                    href: `${base}/family`,       available: false },
-        { label: "Preferences & Behaviour",   href: `${base}/preferences`,  available: false },
-        { label: "Estate & Compliance",       href: `${base}/estate`,       available: false },
+        { label: "Personal & KYC",           href: `${base}/personal`,     available: true },
+        { label: "Family",                    href: `${base}/family`,       available: true },
+        { label: "Preferences & Behaviour",   href: `${base}/preferences`,  available: true },
+        { label: "Estate & Compliance",       href: `${base}/estate`,       available: true },
       ],
     },
     {

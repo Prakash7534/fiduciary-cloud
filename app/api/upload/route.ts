@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   extractPdfFields, mapToClient, mapToFinancialFacts, mapToLoans,
   mapToInvestments, mapToGoals, mapToFamily, mapToRiskAnswers,
+  mapToBehaviour, mapToKnowledgeGrid,
 } from "@/lib/pdfExtract";
 
 export async function POST(req: NextRequest) {
@@ -41,8 +42,6 @@ export async function POST(req: NextRequest) {
       .from("clients").select("client_id, full_name, pan, dob")
       .eq("user_id", user.id).ilike("full_name", clientFields.full_name);
     if (nameMatches && nameMatches.length > 0) {
-      // Ambiguous — name matches but PAN/DOB couldn't confirm. Don't guess: report back
-      // to the client for confirmation, same principle as the Flask app's /upload/confirm flow.
       return NextResponse.json({
         ambiguous: true,
         reason: `Name matches ${nameMatches.length} existing client(s) but PAN/DOB couldn't confirm it's the same person.`,
@@ -59,25 +58,39 @@ export async function POST(req: NextRequest) {
     clientId = data.client_id;
   } else {
     await supabase.from("clients").update({ ...clientFields, updated_at: new Date().toISOString() }).eq("client_id", clientId!);
-    // Clear out prior "current" data before re-inserting — history is preserved separately in `snapshots`.
-    for (const tbl of ["financial_facts", "risk_answers", "loans", "investments", "goals", "family_members"]) {
+    for (const tbl of ["financial_facts", "risk_answers", "loans", "investments", "goals", "family_members", "behaviour", "knowledge_grid"]) {
       await supabase.from(tbl).delete().eq("client_id", clientId!);
     }
   }
 
   await supabase.from("financial_facts").insert({ client_id: clientId, ...mapToFinancialFacts(raw) });
+
   const answers = mapToRiskAnswers(raw);
   if (answers.length) await supabase.from("risk_answers").insert(answers.map((a) => ({ client_id: clientId, ...a })));
+
   const loans = mapToLoans(raw);
   if (loans.length) await supabase.from("loans").insert(loans.map((l) => ({ client_id: clientId, ...l })));
+
   const invs = mapToInvestments(raw);
   if (invs.length) await supabase.from("investments").insert(invs.map((i) => ({ client_id: clientId, ...i })));
+
   const goals = mapToGoals(raw);
   if (goals.length) await supabase.from("goals").insert(goals.map((g) => ({ client_id: clientId, ...g })));
+
   const family = mapToFamily(raw);
   if (family.length) await supabase.from("family_members").insert(family.map((f) => ({ client_id: clientId, ...f })));
 
-  // ---- snapshot: append-only history, never overwritten ----
+  // Behaviour (G7)
+  const beh = mapToBehaviour(raw);
+  if (beh.beh1 || beh.beh2 || beh.beh3) {
+    await supabase.from("behaviour").insert({ client_id: clientId, ...beh });
+  }
+
+  // Knowledge grid (G6)
+  const kg = mapToKnowledgeGrid(raw);
+  if (kg.length) await supabase.from("knowledge_grid").insert(kg.map((r) => ({ client_id: clientId, ...r })));
+
+  // ---- snapshot: append-only history ----
   await supabase.from("snapshots").insert({
     client_id: clientId,
     source_note: isNew ? "Questionnaire load (new client)" : "Questionnaire load (re-upload)",
