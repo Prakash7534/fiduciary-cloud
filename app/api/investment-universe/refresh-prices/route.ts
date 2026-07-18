@@ -138,6 +138,7 @@ async function runRefresh() {
 
   // ── Update each row individually (PK is composite instrument_id+user_id, upsert won't work) ──
   const updateErrors: string[] = [];
+  console.log(`Refresh: ${updates.length} price updates to apply`);
   await Promise.all(updates.map(async u => {
     const { error: updateError } = await supabase
       .from("investment_universe")
@@ -153,6 +154,13 @@ async function runRefresh() {
     total: instruments.length,
     results,
     timestamp: new Date().toISOString(),
+    debug: {
+      mfCount: mfInstruments.length,
+      stockCount: stockInstruments.length,
+      mfIsins,
+      stockTickers,
+      updateErrors,
+    },
   };
 }
 

@@ -455,8 +455,14 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
       const res = await fetch("/api/investment-universe/refresh-prices", { method: "POST" });
       const json = await res.json();
       setRefreshResult(json);
-      // Re-fetch updated data
-      startTransition(() => router.refresh());
+      // Directly fetch fresh instrument data from DB (bypasses server component cache)
+      const freshRes = await fetch("/api/investment-universe");
+      if (freshRes.ok) {
+        const freshData = await freshRes.json();
+        setData(freshData);
+      } else {
+        startTransition(() => router.refresh());
+      }
     } catch {
       setRefreshResult(null);
     }

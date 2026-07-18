@@ -65,3 +65,14 @@ export async function DELETE(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
+
+export async function GET() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("investment_universe")
+    .select("*")
+    .order("asset_class")
+    .order("category");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data ?? []);
+}
