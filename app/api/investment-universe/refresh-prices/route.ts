@@ -41,34 +41,33 @@ async function fetchAmfiPrices(isins: string[]): Promise<Map<string, number>> {
   return map;
 }
 
-// ── Yahoo Finance chart API (per-ticker, more reliable from server IPs) ────
-async function fetchOneYahoo(ticker: string): Promise<number | null> {
-  const suffixes = [".NS", ".BO"];
-  for (const sfx of suffixes) {
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}${sfx}?interval=1d&range=1d`;
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "application/json",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-        cache: "no-store",
-      });
-      if (!res.ok) continue;
-      const json = await res.json();
-      const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice as number | undefined;
-      if (price && price > 0) return price;
-    } catch { /* try next suffix */ }
+// ── Stooq price fetch (reliable from server IPs, no auth needed) ────────────
+async function fetchOneStooq(ticker: string): Promise<number | null> {
+  // Stooq uses lowercase .ns suffix for NSE stocks and ETFs
+  const symbol = `${ticker.toLowerCase()}.ns`;
+  try {
+    const url = `https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    // CSV: Symbol,Date,Time,Open,High,Low,Close,Volume
+    const lines = text.trim().split("\n");
+    if (lines.length < 2) return null;
+    const cols = lines[1].split(",");
+    const close = parseFloat(cols[6]); // Close price
+    return isNaN(close) || close <= 0 ? null : close;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function fetchYahooPrices(tickers: string[]): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   if (!tickers.length) return map;
-  // Fetch concurrently with a small concurrency limit
-  const results = await Promise.allSettled(tickers.map(t => fetchOneYahoo(t)));
+  const results = await Promise.allSettled(tickers.map(t => fetchOneStooq(t)));
   results.forEach((r, i) => {
     if (r.status === "fulfilled" && r.value != null) {
       map.set(tickers[i], r.value);

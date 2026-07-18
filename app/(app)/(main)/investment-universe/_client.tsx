@@ -397,7 +397,8 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
 
   // Sync local state when server component re-fetches after router.refresh()
   useEffect(() => { setData(initialData); }, [initialData]);
-  const [refreshResult, setRefreshResult] = useState<{ updated: number; failed: number; total: number; timestamp: string } | null>(null);
+  const [refreshResult, setRefreshResult] = useState<{ updated: number; failed: number; total: number; results?: { name: string | null; price?: number; error?: string; source?: string }[] } | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
   const router = useRouter();
 
   const filtered = data.filter(d =>
@@ -472,9 +473,33 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {refreshResult && (
-            <span className={`text-xs px-3 py-1.5 rounded-lg font-medium ${refreshResult.failed === 0 ? "bg-[#E4F1EA] text-[#2E7D5B]" : "bg-[#FEF9E7] text-[#7D6B2E]"}`}>
-              ✓ {refreshResult.updated}/{refreshResult.total} updated · {refreshResult.failed} manual
-            </span>
+            <div className="relative">
+              <button onClick={() => setShowDetail(p => !p)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium cursor-pointer ${refreshResult.failed === 0 ? "bg-[#E4F1EA] text-[#2E7D5B]" : "bg-[#FEF9E7] text-[#7D6B2E]"}`}>
+                ✓ {refreshResult.updated}/{refreshResult.total} updated · {refreshResult.failed} manual ▾
+              </button>
+              {showDetail && refreshResult.results && (
+                <div className="absolute right-0 top-9 z-50 bg-white border border-[#CBD9DC] rounded-xl shadow-xl w-96 max-h-72 overflow-y-auto">
+                  <div className="px-4 py-2 border-b border-[#E7EFEF] flex justify-between items-center">
+                    <span className="text-xs font-semibold text-[#0F3A46]">Refresh details</span>
+                    <button onClick={() => setShowDetail(false)} className="text-[#6B7E86] text-sm">✕</button>
+                  </div>
+                  {refreshResult.results.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between px-4 py-2 border-b border-[#F0F5F5] last:border-0">
+                      <div className="text-xs text-[#0F3A46] truncate flex-1 mr-2">{r.name}</div>
+                      {r.price ? (
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-semibold text-[#2E7D5B]">₹{r.price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+                          <span className="text-[10px] text-[#6B7E86] ml-1">{r.source}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-[#B4463C] shrink-0">{r.error}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <button onClick={handleRefreshPrices} disabled={refreshing}
             className="px-4 py-2 bg-[#C39A38] text-white text-sm font-medium rounded-lg hover:bg-[#a8832e] disabled:opacity-60 transition-colors flex items-center gap-2">
