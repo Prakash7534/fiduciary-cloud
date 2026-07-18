@@ -140,12 +140,12 @@ export function buildAllocationPlan(
   goals: GoalInput[],
   universe: UniverseRow[],
   monthlySurplus: number,
-  overrides?: Partial<Record<string, number>> // asset class % overrides
+  overrides?: Record<string, number> // asset class % overrides
 ): AllocationPlan {
 
   // 1. Base SAA
-  const baseAlloc = BASE_ALLOCATION[profile] ?? BASE_ALLOCATION["Moderate"];
-  const assetAllocation = overrides
+  const baseAlloc: Record<string, number> = BASE_ALLOCATION[profile] ?? BASE_ALLOCATION["Moderate"] ?? { Equity: 50, Debt: 40, Gold: 5, International: 5, Alternate: 0 };
+  const assetAllocation: Record<string, number> = overrides
     ? { ...baseAlloc, ...overrides }
     : { ...baseAlloc };
 
