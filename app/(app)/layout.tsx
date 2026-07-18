@@ -1,5 +1,4 @@
-// app/(app)/layout.tsx
-import Link from "next/link";
+// app/(app)/layout.tsx  — header only; each sub-layout owns its sidebar
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,29 +8,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-[#DDE6E8]">
-      <header className="bg-[#0F3A46] text-white px-6 py-3 border-b-2 border-[#C39A38] flex justify-between items-center">
+    <div className="min-h-screen bg-[#DDE6E8] flex flex-col">
+      <header className="bg-[#0F3A46] text-white px-6 py-3 border-b-2 border-[#C39A38] flex justify-between items-center shrink-0">
         <div>
-          <div className="font-serif text-lg">Fiduciary First</div>
-          <div className="text-[9px] tracking-wider text-[#BFD3D8] uppercase">Cloud Practice Dashboard</div>
+          <div className="font-serif text-lg tracking-wide">Fiduciary First</div>
+          <div className="text-[9px] tracking-widest text-[#BFD3D8] uppercase">Cloud Practice Dashboard</div>
         </div>
         <form action="/auth/signout" method="post">
           <button className="text-xs text-[#BFD3D8] hover:text-white">Sign out</button>
         </form>
       </header>
-      <div className="flex">
-        <aside className="w-60 bg-white border-r border-[#CBD9DC] min-h-[calc(100vh-56px)] p-4 shrink-0">
-          <nav className="space-y-0.5">
-            <Link href="/clients" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#C8D8DB] hover:text-[#0F3A46]">
-              Clients
-            </Link>
-            <Link href="/upload" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#C8D8DB] hover:text-[#0F3A46]">
-              Load Questionnaire
-            </Link>
-          </nav>
-        </aside>
-        <main className="flex-1 p-8 max-w-6xl text-[#0F3A46]">{children}</main>
-      </div>
+      <div className="flex flex-1 min-h-0">{children}</div>
     </div>
   );
 }
