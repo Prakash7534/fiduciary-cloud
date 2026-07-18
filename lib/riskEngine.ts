@@ -69,6 +69,8 @@ export interface GoalRow {
   monthly_sip: number | null;
   inflation_pct: number | null;
   return_pct: number | null;
+  priority: string | null;
+  flexibility: string | null;
 }
 
 export function goalCalc(g: GoalRow, thisYear = new Date().getFullYear()) {
