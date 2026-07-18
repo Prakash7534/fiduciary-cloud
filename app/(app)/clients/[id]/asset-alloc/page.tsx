@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { analyseClient, scoreAnswers } from "@/lib/riskEngine";
+import type { RiskAnswer } from "@/lib/riskEngine";
 import { buildAllocationPlan, type UniverseRow, type GoalInput } from "@/lib/allocationEngine";
 import AssetAllocClient from "./_client";
 
@@ -24,7 +25,7 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
 
   if (error || !client) notFound();
 
-  const answers = (answersRaw ?? []).map(r => ({ questionId: r.question_id, value: r.answer_value }));
+  const answers = (answersRaw ?? []) as RiskAnswer[];
   const scores  = scoreAnswers(answers);
   const analysis = analyseClient(scores, client.dob ?? undefined);
   const monthlySurplus = Math.max(0,
