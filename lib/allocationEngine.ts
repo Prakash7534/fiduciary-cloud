@@ -150,7 +150,7 @@ export function buildAllocationPlan(
     : { ...baseAlloc };
 
   // Normalise to 100
-  const total = Object.values(assetAllocation).reduce((s: number, v: number) => s + v, 0);
+  const total = (Object.values(assetAllocation) as number[]).reduce((s, v) => s + v, 0);
   for (const k of Object.keys(assetAllocation)) assetAllocation[k] = Math.round((assetAllocation[k] ?? 0) / total * 100);
 
   // 2. Bucket goals
@@ -171,7 +171,7 @@ export function buildAllocationPlan(
     assetAllocation["Debt"]   = Math.max(0, (assetAllocation["Debt"]   ?? 0) - shift);
   }
   // Re-normalise
-  const total2 = Object.values(assetAllocation).reduce((s: number, v: number) => s + v, 0);
+  const total2 = (Object.values(assetAllocation) as number[]).reduce((s, v) => s + v, 0);
   for (const k of Object.keys(assetAllocation)) assetAllocation[k] = Math.round((assetAllocation[k] ?? 0) / total2 * 100);
 
   // 4. Build bucket plans
