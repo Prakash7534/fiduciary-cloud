@@ -16,7 +16,6 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
     { data: facts },
     { data: universe },
     { data: positions },
-    { data: savedOvRaw },
   ] = await Promise.all([
     supabase.from("clients").select("full_name, dob, risk_override, allocation_overrides").eq("client_id", id).single(),
     supabase.from("risk_answers").select("question_id, answer_value").eq("client_id", id),
@@ -24,7 +23,6 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
     supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
     supabase.from("investment_universe").select("*").order("asset_class").order("category"),
     supabase.from("portfolio_positions").select("*").eq("client_id", id).order("created_at"),
-    supabase.from("clients").select("allocation_overrides").eq("client_id", id).single(),
   ]);
 
   if (error || !client) notFound();
@@ -36,7 +34,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
 
   const engineProfile = profileFromAnswers(answers);
   const activeProfile = client.risk_override ?? engineProfile;
-  const savedOv = savedOvRaw?.data?.allocation_overrides as Record<string, unknown> | null;
+  const savedOv = client.allocation_overrides as Record<string, unknown> | null;
   const overrideAlloc = (savedOv?.asset_class as Record<string, number> | undefined) ?? null;
 
   const monthlySurplus = Math.max(0,
