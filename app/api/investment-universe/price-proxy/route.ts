@@ -1,7 +1,7 @@
 // app/api/investment-universe/price-proxy/route.ts
 // Client calls this per-instrument; server fetches price and saves to DB.
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 async function fetchMFPrice(isin: string): Promise<{ price: number; source: string } | null> {
   try {
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const supabase = createServiceClient();
+  const supabase = await createClient();
   const { data: inst } = await supabase
     .from("investment_universe")
     .select("instrument_id, name, instrument_type, isin, ticker")
