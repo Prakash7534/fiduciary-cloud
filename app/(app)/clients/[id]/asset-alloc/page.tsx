@@ -32,7 +32,8 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
 
   const engineProfile = profileFromAnswers(answers);
   const activeProfile = client.risk_override ?? engineProfile;
-  const overrideAlloc = (client.allocation_overrides as { asset_class?: Record<string, number> } | null)?.asset_class ?? null;
+  const savedOv = client.allocation_overrides as Record<string, unknown> | null;
+  const overrideAlloc = (savedOv?.asset_class as Record<string, number> | undefined) ?? null;
 
   const monthlySurplus = Math.max(0,
     ((facts?.income_self ?? 0) + (facts?.income_spouse ?? 0) + (facts?.income_other ?? 0)) / 12
@@ -40,16 +41,18 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
   );
 
   const goals = (goalsRaw ?? []) as GoalInput[];
-  const plan  = buildAllocationPlan(activeProfile, goals, (universe ?? []) as UniverseRow[], monthlySurplus, overrideAlloc ?? undefined);
+  const universeRows = (universe ?? []) as UniverseRow[];
+  const plan = buildAllocationPlan(activeProfile, goals, universeRows, monthlySurplus, overrideAlloc ?? undefined);
 
   return (
     <AssetAllocClient
       clientId={id}
       clientName={client.full_name ?? "Client"}
       plan={plan}
-      savedOverrides={client.allocation_overrides as Record<string, unknown> | null}
+      savedOverrides={savedOv}
       hasGoals={goals.length > 0}
-      hasUniverse={(universe?.length ?? 0) > 0}
+      hasUniverse={universeRows.length > 0}
+      universe={universeRows}
     />
   );
 }

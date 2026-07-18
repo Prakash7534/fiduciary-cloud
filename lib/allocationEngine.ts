@@ -67,7 +67,7 @@ export const BASE_ALLOCATION: Record<string, Record<string, number>> = {
 };
 
 // Asset classes that fit each bucket
-const BUCKET_CLASSES: Record<GoalBucket, string[]> = {
+export const BUCKET_CLASSES: Record<GoalBucket, string[]> = {
   short:  ["Debt"],
   medium: ["Debt", "Hybrid", "Gold"],
   long:   ["Equity", "International", "Gold", "Alternate"],
@@ -105,7 +105,7 @@ function sipRequired(fv: number, saved: number, years: number, rate: number): nu
 }
 
 // Score an instrument: higher = better pick
-function scoreInstrument(inst: UniverseRow): number {
+export function scoreInstrument(inst: UniverseRow): number {
   const ret = inst.return_5y ?? inst.return_3y ?? 0;
   const er  = inst.expense_ratio ?? 1.0;
   return ret * 0.7 - er * 0.3;
