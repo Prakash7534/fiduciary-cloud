@@ -21,10 +21,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
       <div className="flex">
         <aside className="w-60 bg-white border-r border-[#CBD9DC] min-h-[calc(100vh-56px)] p-4 shrink-0">
-          <Link href="/clients" className="block px-3 py-2 rounded-md text-sm hover:bg-[#E7EFEF]">
+          <Link href="/clients" className="block px-3 py-2 rounded-md text-sm text-[#0F3A46] hover:bg-[#E7EFEF]">
             Clients
           </Link>
-          <Link href="/upload" className="block px-3 py-2 rounded-md text-sm hover:bg-[#E7EFEF]">
+          <Link href="/upload" className="block px-3 py-2 rounded-md text-sm text-[#0F3A46] hover:bg-[#E7EFEF]">
             Load Questionnaire
           </Link>
         </aside>
