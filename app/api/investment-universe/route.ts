@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { error } = await supabase.from("investment_universe").insert({
-    instrument_id, name, instrument_type, ticker, isin, asset_class, category,
+    instrument_id, name, user_id: user.id, instrument_type, ticker, isin, asset_class, category,
     sub_bucket, risk_level, expense_ratio, return_3y, return_5y, min_sip,
     current_price, price_date: price_date || null, exchange, liquidity, taxation,
     esg: esg ?? false, international: international ?? false, min_knowledge, notes,
