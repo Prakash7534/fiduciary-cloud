@@ -2,7 +2,6 @@
 // Combines risk profile (SAA) with goal time horizons to produce
 // an instrument-level allocation plan with per-goal SIP mapping.
 
-export type AssetClass = "Equity" | "Debt" | "Hybrid" | "Gold" | "International" | "Alternate";
 export type GoalBucket = "short" | "medium" | "long";
 
 export interface UniverseRow {

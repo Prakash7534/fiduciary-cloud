@@ -365,7 +365,7 @@ export default function AssetAllocClient({ clientId, clientName, plan, savedOver
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${c.bg} ${c.label} ${c.border}`}>{b.label}</span>
                         <span className="text-[10px] text-[#6B7E86] ml-2">{b.horizon}</span>
                       </td>
-                      <td className="px-4 py-3 text-[#6B7E86] text-xs">{b.instruments.map(i => i.asset_class).filter((v, i, a) => a.indexOf(v) === i).join(", ") || "—"}</td>
+                      <td className="px-4 py-3 text-[#6B7E86] text-xs">{b.instruments.map(inst => inst.asset_class).filter((v, idx, a) => a.indexOf(v) === idx).join(", ") || "—"}</td>
                       <td className="px-4 py-3 text-right font-semibold text-[#0F3A46]">{b.allocation_pct}%</td>
                       <td className="px-4 py-3 text-right text-[#6B7E86]">{b.goals.length}</td>
                       <td className="px-4 py-3 text-right font-semibold text-[#0F3A46]">{fmtSIP(b.totalShortfall)}</td>

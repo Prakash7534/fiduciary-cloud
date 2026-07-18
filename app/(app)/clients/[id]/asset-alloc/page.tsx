@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import { analyseClient, scoreAnswers, financialPosition } from "@/lib/riskEngine";
+import { analyseClient, scoreAnswers } from "@/lib/riskEngine";
 import { buildAllocationPlan, type UniverseRow, type GoalInput } from "@/lib/allocationEngine";
 import AssetAllocClient from "./_client";
 
@@ -27,8 +27,6 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
   const answers = (answersRaw ?? []).map(r => ({ questionId: r.question_id, value: r.answer_value }));
   const scores  = scoreAnswers(answers);
   const analysis = analyseClient(scores, client.dob ?? undefined);
-  const fp       = financialPosition({} as Parameters<typeof financialPosition>[0]);
-
   const monthlySurplus = Math.max(0,
     ((facts?.income_self ?? 0) + (facts?.income_spouse ?? 0) + (facts?.income_other ?? 0)) / 12
     - (facts?.expenses_annual ?? 0) / 12
