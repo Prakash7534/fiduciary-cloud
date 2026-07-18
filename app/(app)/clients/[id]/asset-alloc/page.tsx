@@ -25,7 +25,10 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
 
   if (error || !client) notFound();
 
-  const answers = (answersRaw ?? []) as RiskAnswer[];
+  const answers: RiskAnswer[] = (answersRaw ?? []).map((r) => ({
+    question_num: r.question_id as number,
+    answer: r.answer_value as "A" | "B" | "C" | "D" | "E",
+  }));
   const scores  = scoreAnswers(answers);
   const analysis = analyseClient(scores, client.dob ?? undefined);
   const monthlySurplus = Math.max(0,
