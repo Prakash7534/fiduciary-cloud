@@ -448,30 +448,7 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
     setPriceItem(null);
   };
 
-  // ── Client-side price fetcher (runs in browser — no Vercel network restrictions) ──
-
-  async function fetchMFPrice(isin: string): Promise<number | null> {
-    try {
-      const s = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(isin)}`).then(r => r.json());
-      if (!s?.length) return null;
-      const n = await fetch(`https://api.mfapi.in/mf/${s[0].schemeCode}`).then(r => r.json());
-      const nav = parseFloat(n?.data?.[0]?.nav ?? "");
-      return isNaN(nav) || nav <= 0 ? null : nav;
-    } catch { return null; }
-  }
-
-  async function fetchStockPrice(ticker: string): Promise<number | null> {
-    for (const sfx of [".NS", ".BO"]) {
-      try {
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}${sfx}?interval=1d&range=1d`;
-        const j = await fetch(url).then(r => r.json());
-        const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        if (p && p > 0) return p;
-      } catch { /* try next */ }
-    }
-    return null;
-  }
-
+  // ── Price refresh: client calls per-instrument server proxy (no CORS issues) ──
   const handleRefreshPrices = async () => {
     setRefreshing(true);
     setRefreshResult(null);
@@ -480,32 +457,30 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
     let updated = 0;
 
     for (const inst of data) {
-      let price: number | null = null;
-      let source = "";
-
-      if (inst.instrument_type === "MF" && inst.isin) {
-        price = await fetchMFPrice(inst.isin);
-        source = "mfapi.in";
-      } else if ((inst.instrument_type === "Stock" || inst.instrument_type === "ETF") && inst.ticker) {
-        price = await fetchStockPrice(inst.ticker);
-        source = "Yahoo Finance";
+      // Bonds / instruments without ISIN+ticker skip immediately
+      if (inst.instrument_type === "Bond" ||
+          (inst.instrument_type === "MF" && !inst.isin) ||
+          (["Stock","ETF"].includes(inst.instrument_type ?? "") && !inst.ticker)) {
+        results.push({ name: inst.name, error: "No ISIN/ticker — manual update" });
+        continue;
       }
 
-      if (price != null) {
-        // Save to DB
-        await fetch("/api/investment-universe", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...inst, current_price: price, price_date: today }),
-        });
-        // Update local state immediately
-        setData(prev => prev.map(i =>
-          i.instrument_id === inst.instrument_id ? { ...i, current_price: price, price_date: today } : i
-        ));
-        results.push({ name: inst.name, price, source });
-        updated++;
-      } else {
-        results.push({ name: inst.name, error: inst.instrument_type === "Bond" ? "Manual update" : "Not found" });
+      try {
+        const res = await fetch(`/api/investment-universe/price-proxy?id=${encodeURIComponent(inst.instrument_id)}`);
+        const json: { price?: number; source?: string; error?: string; date?: string } = await res.json();
+        if (json.price) {
+          setData(prev => prev.map(i =>
+            i.instrument_id === inst.instrument_id
+              ? { ...i, current_price: json.price ?? null, price_date: today }
+              : i
+          ));
+          results.push({ name: inst.name, price: json.price, source: json.source });
+          updated++;
+        } else {
+          results.push({ name: inst.name, error: json.error ?? "Not found" });
+        }
+      } catch {
+        results.push({ name: inst.name, error: "Network error" });
       }
     }
 
