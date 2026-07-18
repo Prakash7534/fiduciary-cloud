@@ -21,14 +21,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
       <div className="flex">
         <aside className="w-60 bg-white border-r border-[#CBD9DC] min-h-[calc(100vh-56px)] p-4 shrink-0">
-          <Link href="/clients" className="block px-3 py-2 rounded-md text-sm text-[#0F3A46] hover:bg-[#E7EFEF]">
-            Clients
-          </Link>
-          <Link href="/upload" className="block px-3 py-2 rounded-md text-sm text-[#0F3A46] hover:bg-[#E7EFEF]">
-            Load Questionnaire
-          </Link>
+          <nav className="space-y-0.5">
+            <Link href="/clients" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#E7EFEF] hover:text-[#0F3A46]">
+              Clients
+            </Link>
+            <Link href="/upload" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#E7EFEF] hover:text-[#0F3A46]">
+              Load Questionnaire
+            </Link>
+          </nav>
         </aside>
-        <main className="flex-1 p-8 max-w-6xl">{children}</main>
+        <main className="flex-1 p-8 max-w-6xl text-[#0F3A46]">{children}</main>
       </div>
     </div>
   );
