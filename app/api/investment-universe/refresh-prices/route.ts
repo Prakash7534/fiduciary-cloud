@@ -41,33 +41,39 @@ async function fetchAmfiPrices(isins: string[]): Promise<Map<string, number>> {
   return map;
 }
 
-// ── Yahoo Finance quote API ─────────────────────────────────────────────────
+// ── Yahoo Finance chart API (per-ticker, more reliable from server IPs) ────
+async function fetchOneYahoo(ticker: string): Promise<number | null> {
+  const suffixes = [".NS", ".BO"];
+  for (const sfx of suffixes) {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}${sfx}?interval=1d&range=1d`;
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "application/json",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        cache: "no-store",
+      });
+      if (!res.ok) continue;
+      const json = await res.json();
+      const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice as number | undefined;
+      if (price && price > 0) return price;
+    } catch { /* try next suffix */ }
+  }
+  return null;
+}
+
 async function fetchYahooPrices(tickers: string[]): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   if (!tickers.length) return map;
-  try {
-    // Append .NS for NSE if no exchange suffix
-    const symbols = tickers
-      .map(t => /\.(NS|BSE|BO)$/i.test(t) ? t.toUpperCase() : `${t.toUpperCase()}.NS`)
-      .join(",");
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,symbol`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return map;
-    const json = await res.json();
-    for (const q of json?.quoteResponse?.result ?? []) {
-      const price = q.regularMarketPrice as number;
-      if (!price) continue;
-      // Store by base ticker (strip .NS/.BSE)
-      const base = (q.symbol as string).replace(/\.(NS|BSE|BO)$/i, "");
-      map.set(base, price);
-      map.set(q.symbol as string, price); // also store with suffix
+  // Fetch concurrently with a small concurrency limit
+  const results = await Promise.allSettled(tickers.map(t => fetchOneYahoo(t)));
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled" && r.value != null) {
+      map.set(tickers[i], r.value);
     }
-  } catch (e) {
-    console.error("Yahoo Finance fetch error:", e);
-  }
+  });
   return map;
 }
 

@@ -1,6 +1,6 @@
 // app/(app)/(main)/investment-universe/_client.tsx
 "use client";
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export interface Instrument {
@@ -394,6 +394,9 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Sync local state when server component re-fetches after router.refresh()
+  useEffect(() => { setData(initialData); }, [initialData]);
   const [refreshResult, setRefreshResult] = useState<{ updated: number; failed: number; total: number; timestamp: string } | null>(null);
   const router = useRouter();
 
