@@ -268,6 +268,8 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
   const [priceItem, setPriceItem] = useState<Instrument | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshResult, setRefreshResult] = useState<{ updated: number; failed: number; total: number; timestamp: string } | null>(null);
   const router = useRouter();
 
   const filtered = data.filter(d =>
@@ -311,6 +313,21 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
     setPriceItem(null);
   };
 
+  const handleRefreshPrices = async () => {
+    setRefreshing(true);
+    setRefreshResult(null);
+    try {
+      const res = await fetch("/api/investment-universe/refresh-prices", { method: "POST" });
+      const json = await res.json();
+      setRefreshResult(json);
+      // Re-fetch updated data
+      startTransition(() => router.refresh());
+    } catch {
+      setRefreshResult(null);
+    }
+    setRefreshing(false);
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -319,10 +336,21 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
           <h1 className="text-xl font-semibold text-[#0F3A46]">Investment Universe</h1>
           <p className="text-xs text-[#6B7E86] mt-0.5">{data.length} instruments · adviser-managed product list</p>
         </div>
-        <button onClick={() => setEditItem(BLANK)}
-          className="px-4 py-2 bg-[#0F3A46] text-white text-sm font-medium rounded-lg hover:bg-[#175A69] transition-colors">
-          + Add instrument
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {refreshResult && (
+            <span className={`text-xs px-3 py-1.5 rounded-lg font-medium ${refreshResult.failed === 0 ? "bg-[#E4F1EA] text-[#2E7D5B]" : "bg-[#FEF9E7] text-[#7D6B2E]"}`}>
+              ✓ {refreshResult.updated}/{refreshResult.total} updated · {refreshResult.failed} manual
+            </span>
+          )}
+          <button onClick={handleRefreshPrices} disabled={refreshing}
+            className="px-4 py-2 bg-[#C39A38] text-white text-sm font-medium rounded-lg hover:bg-[#a8832e] disabled:opacity-60 transition-colors flex items-center gap-2">
+            {refreshing ? <><span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" />Fetching…</> : "⟳ Refresh Prices"}
+          </button>
+          <button onClick={() => setEditItem(BLANK)}
+            className="px-4 py-2 bg-[#0F3A46] text-white text-sm font-medium rounded-lg hover:bg-[#175A69] transition-colors">
+            + Add instrument
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
