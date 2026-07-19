@@ -87,6 +87,9 @@ export default async function ClientsPage() {
                     {client.updated_at ? new Date(client.updated_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-3 py-2.5">
+                    <Link href={`/clients/${client.client_id}/questionnaire`} className="text-[#C39A38] text-xs font-medium hover:underline mr-3">
+                      Questionnaire
+                    </Link>
                     <Link href={`/clients/${client.client_id}`} className="text-[#175A69] text-xs font-medium hover:underline">
                       Open →
                     </Link>
