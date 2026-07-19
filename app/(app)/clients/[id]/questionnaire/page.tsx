@@ -34,6 +34,7 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
   const eventLabel: Record<string, { label: string; icon: string; colour: string }> = {
     questionnaire_submitted:         { label: "Questionnaire submitted",        icon: "✅", colour: "text-[#2E7D5B]" },
     questionnaire_validation_failed: { label: "Validation failed",              icon: "⚠",  colour: "text-[#B4463C]" },
+    review_pdf_downloaded:           { label: "Review PDF generated",           icon: "🔄", colour: "text-[#175A69]" },
   };
 
   return (
@@ -80,6 +81,30 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
             className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 bg-[#0F3A46] text-white rounded-lg text-sm font-semibold hover:bg-[#175A69] transition-colors"
           >
             ⬇ Download PDF
+          </a>
+        </div>
+      </div>
+
+      {/* Review PDF download */}
+      <div className="bg-white border border-[#CBD9DC] rounded-xl px-6 py-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-sm font-semibold text-[#0F3A46]">Download periodic review questionnaire (PDF)</p>
+            <p className="text-xs text-[#6B7E86] mt-1 max-w-sm">
+              Shorter, purpose-built form for annual or triggered reviews. Previous financial data and risk answers are pre-filled for reference — all sections remain editable.
+            </p>
+            <ul className="mt-2 space-y-0.5 text-xs text-[#6B7E86]">
+              <li>• Identity locked · Financial + goals pre-filled from last profile</li>
+              <li>• Risk Q1–19 pre-filled from previous answers — update if changed</li>
+              <li>• Life-events checklist · Revised profile + dual signature block</li>
+              <li>• Supports trend analysis — each review is timestamped in activity log</li>
+            </ul>
+          </div>
+          <a
+            href={`/api/clients/${id}/review-pdf`}
+            className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 bg-[#175A69] text-white rounded-lg text-sm font-semibold hover:bg-[#0F3A46] transition-colors"
+          >
+            🔄 Download Review PDF
           </a>
         </div>
       </div>
