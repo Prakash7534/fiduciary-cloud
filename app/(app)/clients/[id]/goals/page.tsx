@@ -37,8 +37,15 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   const expenses = (facts?.expenses_annual ?? 0) / 12;
   const surplus = income - expenses;
 
-  const calcs = goals.map(g => ({ g, c: goalCalc(g, THIS_YEAR) }));
-  const totalExtraSip = calcs.reduce((s, { c }) => s + c.extraSip, 0);
+  const calcs = goals.map(g => {
+    const c = goalCalc(g, THIS_YEAR);
+    // Lumpsum invested TODAY that would close the FV shortfall at the goal's return assumption
+    const r = (g.return_pct ?? 10) / 100;
+    const lumpsumNow = c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
+    return { g, c, lumpsumNow: Math.round(lumpsumNow) };
+  });
+  const totalExtraSip   = calcs.reduce((s, { c }) => s + c.extraSip, 0);
+  const totalLumpsumNow = calcs.reduce((s, x) => s + x.lumpsumNow, 0);
 
   const FUNDED_COLOR  = "#2E7D5B";
   const PARTIAL_COLOR = "#C39A38";
@@ -48,7 +55,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     <div className="space-y-5">
 
       {/* Summary header */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white border border-[#CBD9DC] rounded-xl p-4">
           <div className="text-xs text-[#6B7E86] mb-1">Goals on record</div>
           <div className="text-3xl font-bold font-serif text-[#0F3A46]">{goals.length}</div>
@@ -63,6 +70,13 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
             {totalExtraSip > 0 ? fmtCr(totalExtraSip) + "/mo" : "All goals on track ✓"}
           </div>
         </div>
+        <div className={`border rounded-xl p-4 ${totalLumpsumNow > 0 ? "bg-[#FFFBF2] border-[#E3D3A8]" : "bg-[#E4F1EA] border-[#B3D9C3]"}`}>
+          <div className="text-xs text-[#6B7E86] mb-1">OR one-time lumpsum today (all goals)</div>
+          <div className={`font-bold ${totalLumpsumNow > 0 ? "text-[#8A6D1C]" : "text-[#2E7D5B]"}`}>
+            {totalLumpsumNow > 0 ? fmtCr(totalLumpsumNow) : "Nothing needed ✓"}
+          </div>
+          <div className="text-[10px] text-[#6B7E86] mt-0.5">invest now instead of extra SIP</div>
+        </div>
       </div>
 
       {goals.length === 0 ? (
@@ -71,7 +85,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
         </div>
       ) : (
         <div className="space-y-4">
-          {calcs.map(({ g, c }, i) => {
+          {calcs.map(({ g, c, lumpsumNow }, i) => {
             const fundedPct = c.fv > 0 ? Math.min(100, (c.path / c.fv) * 100) : 100;
             const isFunded = c.gap === 0;
             const barColor = fundedPct >= 90 ? FUNDED_COLOR : fundedPct >= 50 ? PARTIAL_COLOR : GAP_COLOR;
@@ -130,14 +144,18 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
 
                 {/* Gap / extra SIP */}
                 {c.gap > 0 && (
-                  <div className="mt-3 flex items-center justify-between bg-[#FFF7F6] border border-[#E4B3AE] rounded-lg px-4 py-2.5">
+                  <div className="mt-3 flex items-center justify-between flex-wrap gap-2 bg-[#FFF7F6] border border-[#E4B3AE] rounded-lg px-4 py-2.5">
                     <div>
                       <span className="text-xs text-[#6B7E86]">Shortfall: </span>
                       <span className="text-sm font-bold text-[#B4463C]">{fmtCr(c.gap)}</span>
                     </div>
                     <div>
-                      <span className="text-xs text-[#6B7E86]">Additional SIP needed: </span>
+                      <span className="text-xs text-[#6B7E86]">Additional SIP: </span>
                       <span className="text-sm font-bold text-[#B4463C]">{fmtCr(c.extraSip)}/mo</span>
+                    </div>
+                    <div>
+                      <span className="text-xs text-[#6B7E86]">OR lumpsum today: </span>
+                      <span className="text-sm font-bold text-[#8A6D1C]">{fmtCr(lumpsumNow)}</span>
                     </div>
                     <div className="text-xs text-[#6B7E86]">@ {g.return_pct ?? 10}% p.a.</div>
                   </div>
