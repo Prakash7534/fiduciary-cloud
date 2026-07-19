@@ -1,5 +1,6 @@
 // app/(app)/clients/[id]/page.tsx  — Risk Analysis Dashboard
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   analyseClient, CATEGORIES,
@@ -77,6 +78,28 @@ export default async function RiskProfilePage({ params }: { params: Promise<{ id
         <p className="text-sm text-[#4A6572]">
           Age {a.age ?? "—"} · Years to retirement {a.yearsToRetirement ?? "—"} · Income {fmt(a.income)} · Assets {fmt(a.totalAssets)} · Debt {fmt(a.totalDebt)}
         </p>
+      </div>
+
+      {/* ── Questionnaire CTA ── */}
+      <div className={"flex items-center justify-between gap-4 px-5 py-4 rounded-xl border " + (a.answered > 0 ? "bg-[#F5F9FA] border-[#CBD9DC]" : "bg-[#0F3A46] border-[#0F3A46]")}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={"w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 " + (a.answered > 0 ? "bg-[#E8F4EE]" : "bg-white/10")}>
+            {a.answered === 19 ? "✅" : a.answered > 0 ? "📋" : "📝"}
+          </div>
+          <div className="min-w-0">
+            <p className={"text-sm font-semibold " + (a.answered > 0 ? "text-[#0F3A46]" : "text-white")}>
+              {a.answered === 19 ? "Questionnaire complete" : a.answered > 0 ? `Questionnaire in progress (${a.answered}/19 answered)` : "Questionnaire not yet filled"}
+            </p>
+            <p className={"text-xs truncate " + (a.answered > 0 ? "text-[#6B7E86]" : "text-[#A0C4CE]")}>
+              {client.client_code && <span className="font-mono font-semibold mr-2">{client.client_code}</span>}
+              {a.answered === 0 ? "Generate the questionnaire for this client to capture their risk profile and financial goals." : a.answered < 19 ? "Some questions are unanswered — the risk profile may be incomplete." : "All questions answered. You can re-fill to update the profile."}
+            </p>
+          </div>
+        </div>
+        <Link href={`/clients/${id}/questionnaire`}
+          className={"shrink-0 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap " + (a.answered > 0 ? "bg-[#0F3A46] text-white hover:bg-[#175A69]" : "bg-[#C39A38] text-[#0F3A46] hover:bg-[#B08930]")}>
+          {a.answered === 0 ? "Generate questionnaire →" : "Update questionnaire →"}
+        </Link>
       </div>
 
       {/* — dashboard title — */}

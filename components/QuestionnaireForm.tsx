@@ -22,6 +22,9 @@ export interface QuestionnairePayload {
   knowledge: KnowledgeDraft;
 }
 
+// Fields locked from profile creation (shown read-only with badge)
+const PROFILE_LOCKED: (keyof QuestionnairePayload["personal"])[] = ["full_name", "email", "phone", "pan", "dob"];
+
 interface Props {
   clientCode: string; clientName: string;
   onSubmit: (payload: QuestionnairePayload) => Promise<void>;
@@ -114,15 +117,27 @@ export default function QuestionnaireForm({ clientCode, clientName, onSubmit, pr
   return (
     <div className="space-y-5">
       {/* UCC Header */}
-      <div className="bg-[#0F3A46] rounded-2xl px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-[#A0C4CE] text-[10px] uppercase tracking-widest mb-0.5">Client Questionnaire</p>
-          <h2 className="text-white font-semibold text-base">{clientName || "New Client"}</h2>
+      <div className="bg-[#0F3A46] rounded-2xl overflow-hidden">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-[#A0C4CE] text-[10px] uppercase tracking-widest mb-0.5">Client Questionnaire</p>
+            <h2 className="text-white font-semibold text-lg">{clientName || "New Client"}</h2>
+          </div>
+          <div className="text-right">
+            <p className="text-[#A0C4CE] text-[10px] mb-0.5">Unique Client Code (UCC)</p>
+            <span className="font-mono font-bold text-[#C39A38] text-2xl tracking-widest">{clientCode}</span>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-[#A0C4CE] text-[10px] mb-0.5">Unique Client Code (UCC)</p>
-          <span className="font-mono font-bold text-[#C39A38] text-xl tracking-widest">{clientCode}</span>
-        </div>
+        {/* Profile snapshot — shown if we have prefill data */}
+        {prefill && (prefill.email || prefill.phone || prefill.pan || prefill.dob) && (
+          <div className="border-t border-white/10 px-6 py-3 flex gap-4 flex-wrap">
+            {prefill.email && <span className="text-[10px] text-[#A0C4CE]">✉ {prefill.email}</span>}
+            {prefill.phone && <span className="text-[10px] text-[#A0C4CE]">📱 {prefill.phone}</span>}
+            {prefill.pan   && <span className="text-[10px] text-[#A0C4CE] font-mono">PAN {prefill.pan.toUpperCase()}</span>}
+            {prefill.dob   && <span className="text-[10px] text-[#A0C4CE]">🗓 {new Date(prefill.dob).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})}</span>}
+            <span className="text-[10px] text-[#5B7A84] ml-auto">Profile details pre-loaded</span>
+          </div>
+        )}
       </div>
 
       {/* Progress */}
@@ -153,18 +168,66 @@ export default function QuestionnaireForm({ clientCode, clientName, onSubmit, pr
 
           {/* PERSONAL */}
           {curStep === "personal" && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2"><FL label="Full name *"><TI v={personal.full_name} set={sp("full_name")} ph="As per PAN card" /></FL></div>
-              <FL label="Date of birth"><input type="date" value={personal.dob} onChange={e => sp("dob")(e.target.value)} className={inp} /></FL>
-              <FL label="PAN"><TI v={personal.pan} set={sp("pan")} ph="ABCDE1234F" cls="font-mono uppercase" /></FL>
-              <FL label="Email"><TI v={personal.email} set={sp("email")} type="email" ph="client@email.com" /></FL>
-              <FL label="Phone"><TI v={personal.phone} set={sp("phone")} ph="+91 98765 43210" /></FL>
-              <FL label="Gender"><Sel v={personal.gender} set={sp("gender")}><option value="">— select —</option>{["Male","Female","Other"].map(o=><option key={o}>{o}</option>)}</Sel></FL>
-              <FL label="Marital status"><Sel v={personal.marital_status} set={sp("marital_status")}><option value="">— select —</option>{["Single","Married","Divorced","Widowed"].map(o=><option key={o}>{o}</option>)}</Sel></FL>
-              <FL label="Occupation"><Sel v={personal.occupation} set={sp("occupation")}><option value="">— select —</option>{["Salaried","Self-employed","Business","Retired","Student","Homemaker","Other"].map(o=><option key={o}>{o}</option>)}</Sel></FL>
-              <FL label="Client type"><Sel v={personal.client_type} set={sp("client_type")}>{["Individual","HUF","Partnership","Company","Trust","NRI"].map(o=><option key={o}>{o}</option>)}</Sel></FL>
-              <FL label="Nationality"><TI v={personal.nationality} set={sp("nationality")} ph="Indian" /></FL>
-              <div className="col-span-2"><FL label="Address"><TI v={personal.address} set={sp("address")} ph="Full residential address" /></FL></div>
+            <div className="space-y-4">
+              {/* Profile-locked fields banner */}
+              <div className="bg-[#EBF3F5] border border-[#C8D8DB] rounded-xl px-4 py-3 flex items-center gap-2">
+                <span className="text-sm">🔒</span>
+                <p className="text-xs text-[#175A69] font-medium">Fields marked <span className="bg-[#175A69] text-white text-[9px] px-1.5 py-0.5 rounded font-bold">FROM PROFILE</span> were captured during profile creation. Update them from the personal profile page if needed.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Name — profile-locked */}
+                <div className="col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-[#0F3A46]">Full name *</label>
+                    {prefill?.full_name && <span className="text-[9px] bg-[#175A69] text-white px-1.5 py-0.5 rounded font-bold">FROM PROFILE</span>}
+                  </div>
+                  <input value={personal.full_name} onChange={e => sp("full_name")(e.target.value)} placeholder="As per PAN card" readOnly={!!prefill?.full_name}
+                    className={"w-full border rounded-lg px-3 py-2 text-sm focus:outline-none " + (prefill?.full_name ? "bg-[#F0F5F6] border-[#C8D8DB] text-[#0F3A46] font-medium cursor-default" : "border-[#CBD9DC] focus:border-[#175A69]")} />
+                </div>
+                {/* DOB — profile-locked */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-[#0F3A46]">Date of birth *</label>
+                    {prefill?.dob && <span className="text-[9px] bg-[#175A69] text-white px-1.5 py-0.5 rounded font-bold">FROM PROFILE</span>}
+                  </div>
+                  <input type="date" value={personal.dob} onChange={e => sp("dob")(e.target.value)} readOnly={!!prefill?.dob}
+                    className={"w-full border rounded-lg px-3 py-2 text-sm focus:outline-none " + (prefill?.dob ? "bg-[#F0F5F6] border-[#C8D8DB] text-[#0F3A46] cursor-default" : "border-[#CBD9DC] focus:border-[#175A69]")} />
+                </div>
+                {/* PAN — profile-locked */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-[#0F3A46]">PAN *</label>
+                    {prefill?.pan && <span className="text-[9px] bg-[#175A69] text-white px-1.5 py-0.5 rounded font-bold">FROM PROFILE</span>}
+                  </div>
+                  <input value={personal.pan} onChange={e => sp("pan")(e.target.value)} placeholder="ABCDE1234F" readOnly={!!prefill?.pan}
+                    className={"w-full border rounded-lg px-3 py-2 text-sm focus:outline-none font-mono uppercase " + (prefill?.pan ? "bg-[#F0F5F6] border-[#C8D8DB] text-[#0F3A46] cursor-default" : "border-[#CBD9DC] focus:border-[#175A69]")} />
+                </div>
+                {/* Email — profile-locked */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-[#0F3A46]">Email *</label>
+                    {prefill?.email && <span className="text-[9px] bg-[#175A69] text-white px-1.5 py-0.5 rounded font-bold">FROM PROFILE</span>}
+                  </div>
+                  <input type="email" value={personal.email} onChange={e => sp("email")(e.target.value)} placeholder="client@email.com" readOnly={!!prefill?.email}
+                    className={"w-full border rounded-lg px-3 py-2 text-sm focus:outline-none " + (prefill?.email ? "bg-[#F0F5F6] border-[#C8D8DB] text-[#0F3A46] cursor-default" : "border-[#CBD9DC] focus:border-[#175A69]")} />
+                </div>
+                {/* Phone — profile-locked */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-[#0F3A46]">Mobile number *</label>
+                    {prefill?.phone && <span className="text-[9px] bg-[#175A69] text-white px-1.5 py-0.5 rounded font-bold">FROM PROFILE</span>}
+                  </div>
+                  <input value={personal.phone} onChange={e => sp("phone")(e.target.value)} placeholder="+91 98765 43210" readOnly={!!prefill?.phone}
+                    className={"w-full border rounded-lg px-3 py-2 text-sm focus:outline-none " + (prefill?.phone ? "bg-[#F0F5F6] border-[#C8D8DB] text-[#0F3A46] cursor-default" : "border-[#CBD9DC] focus:border-[#175A69]")} />
+                </div>
+                {/* Remaining editable fields */}
+                <FL label="Gender"><Sel v={personal.gender} set={sp("gender")}><option value="">— select —</option>{["Male","Female","Other"].map(o=><option key={o}>{o}</option>)}</Sel></FL>
+                <FL label="Marital status"><Sel v={personal.marital_status} set={sp("marital_status")}><option value="">— select —</option>{["Single","Married","Divorced","Widowed"].map(o=><option key={o}>{o}</option>)}</Sel></FL>
+                <FL label="Occupation"><Sel v={personal.occupation} set={sp("occupation")}><option value="">— select —</option>{["Salaried","Self-employed","Business","Retired","Student","Homemaker","Other"].map(o=><option key={o}>{o}</option>)}</Sel></FL>
+                <FL label="Client type"><Sel v={personal.client_type} set={sp("client_type")}>{["Individual","HUF","Partnership","Company","Trust","NRI"].map(o=><option key={o}>{o}</option>)}</Sel></FL>
+                <FL label="Nationality"><TI v={personal.nationality} set={sp("nationality")} ph="Indian" /></FL>
+                <div className="col-span-2"><FL label="Address"><TI v={personal.address} set={sp("address")} ph="Full residential address" /></FL></div>
+              </div>
             </div>
           )}
 

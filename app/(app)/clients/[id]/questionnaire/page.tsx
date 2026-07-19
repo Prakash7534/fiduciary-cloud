@@ -15,6 +15,17 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
     .single();
   if (error || !client) notFound();
 
+  // Fields that came from profile creation — pre-fill and flag as "from profile"
+  const profileFields = {
+    full_name:  client.full_name ?? undefined,
+    dob:        client.dob ?? undefined,
+    pan:        client.pan ?? undefined,
+    email:      (client.email as string | null) ?? undefined,
+    phone:      (client.phone as string | null) ?? undefined,
+    gender:     (client.gender as string | null) ?? undefined,
+    occupation: (client.occupation as string | null) ?? undefined,
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-2">
       <div className="flex items-center gap-2 text-xs text-[#6B7E86] mb-2">
@@ -28,15 +39,7 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
         clientId={id}
         clientName={client.full_name ?? ""}
         clientCode={client.client_code ?? "—"}
-        prefill={{
-          full_name: client.full_name ?? undefined,
-          dob: client.dob ?? undefined,
-          pan: client.pan ?? undefined,
-          email: (client as Record<string,unknown>).email as string | undefined,
-          phone: (client as Record<string,unknown>).phone as string | undefined,
-          gender: (client as Record<string,unknown>).gender as string | undefined,
-          occupation: (client as Record<string,unknown>).occupation as string | undefined,
-        }}
+        prefill={profileFields}
       />
     </div>
   );
