@@ -38,7 +38,7 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
       {/* PDF + Blank form links */}
       <div className="flex gap-2 justify-end flex-wrap">
         <a
-          href={`/print/q/${id}`}
+          href={`/adviser-q/${id}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0F3A46] text-white rounded-lg text-xs font-semibold hover:bg-[#175A69]"
@@ -46,7 +46,7 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
           ⬇ Download completed PDF
         </a>
         <a
-          href={`/print/q/${id}/blank`}
+          href={`/adviser-q/${id}/blank`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 px-4 py-2 border border-[#CBD9DC] rounded-lg text-xs text-[#0F3A46] font-medium hover:bg-[#F0F5F6]"
