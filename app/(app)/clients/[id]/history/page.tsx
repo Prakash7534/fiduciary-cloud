@@ -1,7 +1,6 @@
 // app/(app)/clients/[id]/history/page.tsx
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 
 const PROFILE_COLOR: Record<string, string> = {
   "Conservative":           "bg-[#E4F1EA] text-[#2E7D5B]",
@@ -50,10 +49,7 @@ export default async function HistoryPage({ params }: { params: Promise<{ id: st
 
       {!snapshots || snapshots.length === 0 ? (
         <div className="bg-white border border-[#CBD9DC] rounded-xl p-8 text-center">
-          <p className="text-[#6B7E86]">No questionnaire uploads recorded yet.</p>
-          <Link href="/upload" className="mt-3 inline-block text-sm text-[#175A69] hover:underline">
-            Load a questionnaire →
-          </Link>
+          <p className="text-[#6B7E86]">No questionnaire submissions recorded yet.</p>
         </div>
       ) : (
         <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
