@@ -35,6 +35,17 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
         <span>/</span>
         <span className="text-[#0F3A46] font-medium">Questionnaire</span>
       </div>
+      {/* PDF download link — only visible when questionnaire has been completed at least once */}
+      <div className="flex justify-end">
+        <a
+          href={`/clients/${id}/questionnaire/print`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-4 py-2 border border-[#CBD9DC] rounded-lg text-xs text-[#0F3A46] font-medium hover:bg-[#F0F5F6]"
+        >
+          ⬇ Download questionnaire PDF
+        </a>
+      </div>
       <AdviserQForm
         clientId={id}
         clientName={client.full_name ?? ""}
