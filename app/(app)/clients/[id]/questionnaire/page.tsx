@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import SubmitPanel from "./_submit";
 
 export default async function QuestionnairePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,13 +15,11 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
     .single();
   if (error || !client) notFound();
 
-  // Count answered risk questions
   const { count: answered } = await supabase
     .from("risk_answers")
     .select("*", { count: "exact", head: true })
     .eq("client_id", id);
 
-  // Count submitted questionnaire links
   const { data: lastSubmit } = await supabase
     .from("questionnaire_links")
     .select("submitted_at")
@@ -48,7 +47,7 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
       </div>
 
       {/* Status card */}
-      <div className="bg-white border border-[#CBD9DC] rounded-xl px-6 py-5 flex items-start gap-4">
+      <div className="bg-white border border-[#CBD9DC] rounded-xl px-6 py-4 flex items-center gap-4">
         <div className={"w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 " + (isComplete ? "bg-[#E8F4EE]" : "bg-[#FFF8EC]")}>
           {isComplete ? "✅" : riskAnswered > 0 ? "📋" : "📄"}
         </div>
@@ -57,8 +56,8 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
             {isComplete ? "Questionnaire complete" : riskAnswered > 0 ? `In progress — ${riskAnswered}/19 risk questions answered` : "Questionnaire not yet submitted"}
           </p>
           <p className="text-xs text-[#6B7E86] mt-0.5">
-            {lastDate ? `Last submitted: ${lastDate}` : "No submission recorded yet."}
-            {" "}UCC: <span className="font-mono font-semibold text-[#0F3A46]">{client.client_code ?? "—"}</span>
+            {lastDate ? `Last submitted: ${lastDate} · ` : ""}
+            UCC: <span className="font-mono font-semibold text-[#0F3A46]">{client.client_code ?? "—"}</span>
           </p>
         </div>
       </div>
@@ -69,12 +68,12 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
           <div>
             <p className="text-sm font-semibold text-[#0F3A46]">Download editable questionnaire (PDF)</p>
             <p className="text-xs text-[#6B7E86] mt-1 max-w-sm">
-              SEBI-compliant risk profiling form with client details pre-filled and locked. Share with the client to fill manually or digitally and return signed.
+              SEBI-compliant risk profiling form with identity details pre-filled and locked. Share with the client to complete and return signed.
             </p>
             <ul className="mt-2 space-y-0.5 text-xs text-[#6B7E86]">
-              <li>• Profile fields (name, PAN, DOB, email, phone) pre-filled &amp; non-editable</li>
-              <li>• All financial, risk, goals and behaviour sections are blank &amp; fillable</li>
-              <li>• Audit-compliant — includes UCC, date of assessment, signature block</li>
+              <li>• Name, PAN, DOB, phone, email — pre-filled &amp; non-editable</li>
+              <li>• Date of assessment &amp; UCC — pre-filled &amp; non-editable</li>
+              <li>• All financial, risk &amp; goals sections — blank &amp; fillable</li>
             </ul>
           </div>
           <a
@@ -85,6 +84,18 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
           </a>
         </div>
       </div>
+
+      {/* Submit panel with identity validation */}
+      <SubmitPanel
+        clientId={id}
+        prefill={{
+          full_name: client.full_name ?? "",
+          pan:       client.pan ?? "",
+          dob:       client.dob ?? "",
+          phone:     (client.phone as string | null) ?? "",
+          email:     (client.email as string | null) ?? "",
+        }}
+      />
     </div>
   );
 }

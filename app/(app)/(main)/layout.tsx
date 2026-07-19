@@ -8,9 +8,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <Link href="/clients" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#C8D8DB]">
           All Clients
         </Link>
-        <Link href="/upload" className="block px-3 py-2 rounded-md text-sm font-medium text-[#0F3A46] hover:bg-[#C8D8DB]">
-          Load Questionnaire
-        </Link>
       </aside>
       <main className="flex-1 p-8 text-[#0F3A46] overflow-auto">{children}</main>
     </>
