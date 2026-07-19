@@ -35,9 +35,14 @@ export default async function ClientsPage() {
           <h1 className="font-serif text-2xl text-[#0F3A46] mb-1">Clients</h1>
           <p className="text-sm text-[#4A6572]">{rows.length} client(s) in the database.</p>
         </div>
-        <Link href="/upload" className="inline-block bg-[#C39A38] text-[#0F3A46] text-sm font-medium rounded-lg px-4 py-2 hover:bg-[#B08930]">
-          + Load questionnaire
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/clients/new" className="inline-block bg-[#0F3A46] text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-[#175A69]">
+            + New Client
+          </Link>
+          <Link href="/upload" className="inline-block bg-[#C39A38] text-[#0F3A46] text-sm font-medium rounded-lg px-4 py-2 hover:bg-[#B08930]">
+            Load questionnaire
+          </Link>
+        </div>
       </div>
 
       {rows.length === 0 ? (
