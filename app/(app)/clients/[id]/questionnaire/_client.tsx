@@ -7,7 +7,7 @@ interface Props {
   clientId: string;
   clientName: string;
   clientCode: string;
-  prefill?: Partial<QuestionnairePayload["personal"]>;
+  prefill?: Partial<QuestionnairePayload["personal"] & { occupation?: string }>;
 }
 
 export default function AdviserQForm({ clientId, clientName, clientCode, prefill }: Props) {

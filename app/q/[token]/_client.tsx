@@ -4,7 +4,7 @@ import QuestionnaireForm, { type QuestionnairePayload } from "@/components/Quest
 interface Props {
   token: string; clientId: string;
   clientName: string; clientCode: string;
-  prefill?: Partial<QuestionnairePayload["personal"]>;
+  prefill?: Partial<QuestionnairePayload["personal"] & { occupation?: string }>;
 }
 
 export default function PublicQForm({ token, clientId, clientName, clientCode, prefill }: Props) {
