@@ -35,23 +35,13 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
         <span>/</span>
         <span className="text-[#0F3A46] font-medium">Questionnaire</span>
       </div>
-      {/* PDF + Blank form links */}
+      {/* PDF download buttons */}
       <div className="flex gap-2 justify-end flex-wrap">
         <a
-          href={`/adviser-q/${id}`}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={`/api/clients/${id}/questionnaire-pdf`}
           className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0F3A46] text-white rounded-lg text-xs font-semibold hover:bg-[#175A69]"
         >
-          ⬇ Download completed PDF
-        </a>
-        <a
-          href={`/adviser-q/${id}/blank`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-4 py-2 border border-[#CBD9DC] rounded-lg text-xs text-[#0F3A46] font-medium hover:bg-[#F0F5F6]"
-        >
-          🖨 Print blank form (manual)
+          ⬇ Download Editable PDF
         </a>
       </div>
       <AdviserQForm
@@ -63,3 +53,4 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
     </div>
   );
 }
+
