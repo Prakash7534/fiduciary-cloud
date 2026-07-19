@@ -109,7 +109,7 @@ export default async function BlankFormPage({ params }: { params: Promise<{ id: 
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <a href={`/clients/${id}/questionnaire`} className="btn" style={{ background: "#1a5a6e" }}>← Back</a>
-            <button className="btn" onClick="window.print()">🖨 Print / Save PDF</button>
+            <button id="print-btn" className="btn">🖨 Print / Save PDF</button>
           </div>
         </div>
 
@@ -426,6 +426,8 @@ export default async function BlankFormPage({ params }: { params: Promise<{ id: 
 
         <script dangerouslySetInnerHTML={{ __html: `
           window.addEventListener("load", function() {
+            var btn = document.getElementById('print-btn');
+            if (btn) btn.addEventListener('click', function() { window.print(); });
             setTimeout(function() { window.print(); }, 400);
           });
         `}} />

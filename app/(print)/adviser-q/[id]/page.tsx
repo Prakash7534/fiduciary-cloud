@@ -203,7 +203,7 @@ export default async function PrintFilledPage({ params }: { params: Promise<{ id
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <a href={`/clients/${id}/questionnaire`} className="btn" style={{ background: "#1a5a6e", textDecoration: "none" }}>← Back</a>
-            <button className="btn" onClick="window.print()">⬇ Download PDF</button>
+            <button id="print-btn" className="btn">⬇ Download PDF</button>
           </div>
         </div>
 
@@ -479,7 +479,8 @@ export default async function PrintFilledPage({ params }: { params: Promise<{ id
         {/* Auto-print script */}
         <script dangerouslySetInnerHTML={{ __html: `
           window.addEventListener("load", function() {
-            // Small delay so fonts load
+            var btn = document.getElementById('print-btn');
+            if (btn) btn.addEventListener('click', function() { window.print(); });
             setTimeout(function() { window.print(); }, 600);
           });
         `}} />
