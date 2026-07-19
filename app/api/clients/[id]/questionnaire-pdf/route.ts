@@ -131,7 +131,7 @@ export async function GET(
 
 
   // ── Lock only identity fields — non-editable by client ───────────────────
-  ["client_name","pan","dob","phone","email"].forEach(n => lock(form, n));
+  ["client_name","pan","dob","phone","email","f_1","f_2"].forEach(n => lock(form, n));
 
   // ── SECTION B — Financial Situation ───────────────────────────────────────
   if (ff) {

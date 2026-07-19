@@ -122,6 +122,9 @@ export default function ClientSidebar({ clientId, clientName }: { clientId: stri
       <div className="border-t border-[#CBD9DC] p-3 shrink-0 space-y-0.5">
         <Link href="/clients" className="block px-3 py-1.5 rounded text-sm text-[#0F3A46] hover:bg-[#C8D8DB]">All Clients</Link>
         <Link href="/clients/new" className="block px-3 py-1.5 rounded text-sm text-[#0F3A46] hover:bg-[#C8D8DB]">+ New Client</Link>
+        {pathname.endsWith("/questionnaire") && (
+          <Link href="/upload" className="block px-3 py-1.5 rounded text-sm text-[#C39A38] font-medium hover:bg-[#FFF8EC]">Load Questionnaire</Link>
+        )}
         <Link href="/investment-universe" className="block px-3 py-1.5 rounded text-sm text-[#0F3A46] hover:bg-[#C8D8DB]">Investment Universe</Link>
       </div>
     </aside>
