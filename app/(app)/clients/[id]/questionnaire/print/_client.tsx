@@ -1,28 +1,71 @@
 "use client";
-// Print client — renders the complete questionnaire as a printable page
 import { ALL_RISK_QUESTIONS } from "@/lib/questionnaire";
 
+// ─── Typed interfaces ──────────────────────────────────────────────────────
+interface ClientRow {
+  client_id: string; full_name: string | null; email: string | null;
+  phone: string | null; pan: string | null; dob: string | null;
+  gender: string | null; marital_status: string | null; address: string | null;
+  client_type: string | null; residential_status: string | null;
+  nationality: string | null; client_code: string | null;
+  occupation: string | null; employer: string | null; industry: string | null;
+  years_exp: number | null; career_stage: string | null; education: string | null;
+  dependants_detail: string | null;
+  owns_business: boolean | null; sole_earner: boolean | null;
+  expecting_inheritance: boolean | null; plan_change: boolean | null;
+}
+interface FFRow {
+  income_self: number | null; income_spouse: number | null;
+  income_other: number | null; life_cover: number | null;
+  health_cover: number | null; employer_cover: number | null;
+  retirement_age: number | null; will_status: string | null;
+  pep: string | null; fatca: string | null; covers_held: string | null;
+  nominees_updated: string | null; trust_status: string | null;
+  poa_status: string | null; guardian_status: string | null;
+}
+interface GoalRow {
+  goal_name: string; target_year: number | null; cost_today: number | null;
+  saved: number | null; monthly_sip: number | null;
+  priority: string | null; flexibility: string | null;
+  inflation_pct: number | null; return_pct: number | null;
+}
+interface LoanRow {
+  loan_type: string; lender: string | null; outstanding: number | null;
+  emi: number | null; rate: number | null; tenure_months: number | null;
+}
+interface FamilyRow {
+  name: string; relationship: string | null; age: number | null;
+  occupation: string | null; annual_income: number | null; health_status: string | null;
+}
+interface BehaviourRow { beh1: string | null; beh2: string | null; beh3: string | null; }
+interface KnowledgeRow { asset_class: string; level: string; }
+interface InvestmentRow { asset_class: string; value: number; }
+
 interface Props {
-  client: Record<string, unknown>;
-  ff: Record<string, unknown> | null;
+  client: ClientRow;
+  ff: FFRow | null;
   riskAnswers: { question_num: number; answer: string }[];
-  goals: Record<string, unknown>[];
-  loans: Record<string, unknown>[];
-  family: Record<string, unknown>[];
-  behaviour: Record<string, unknown> | null;
-  knowledge: { asset_class: string; level: string }[];
-  investments: { asset_class: string; value: number }[];
+  goals: GoalRow[];
+  loans: LoanRow[];
+  family: FamilyRow[];
+  behaviour: BehaviourRow | null;
+  knowledge: KnowledgeRow[];
+  investments: InvestmentRow[];
 }
 
-const fmt = (v: unknown) => v ? String(v) : "—";
-const fmtBool = (v: unknown) => v === true ? "Yes" : v === false ? "No" : "—";
-const fmtMoney = (v: unknown) => v ? `₹ ${Number(v).toLocaleString("en-IN")}` : "—";
-const fmtDate = (v: unknown) => {
+// ─── Helpers ───────────────────────────────────────────────────────────────
+const fmt = (v: string | number | null | undefined) => (v != null && v !== "") ? String(v) : "—";
+const fmtBool = (v: boolean | null | undefined) => v === true ? "Yes" : v === false ? "No" : "—";
+const fmtMoney = (v: number | null | undefined) =>
+  v != null ? `₹ ${Number(v).toLocaleString("en-IN")}` : "—";
+const fmtDate = (v: string | null | undefined) => {
   if (!v) return "—";
-  try { return new Date(String(v)).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }); }
-  catch { return String(v); }
+  try { return new Date(v).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }); }
+  catch { return v; }
 };
+const fmtPct = (v: number | null | undefined) => v != null ? `${v}%` : "—";
 
+// ─── Sub-components ────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-6 print:mb-5">
@@ -33,26 +76,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </div>
   );
 }
-
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3 py-1 border-b border-gray-100 text-xs">
-      <span className="w-44 shrink-0 text-gray-500 font-medium">{label}</span>
+      <span className="w-48 shrink-0 text-gray-500 font-medium">{label}</span>
       <span className="text-gray-900 font-medium">{value}</span>
     </div>
   );
 }
-
 function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-x-8 gap-y-0">{children}</div>;
 }
 
-export default function PrintClient({ client, ff, riskAnswers, goals, loans, family, behaviour, knowledge, investments }: Props) {
-  const printedAt = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+// ─── Main ──────────────────────────────────────────────────────────────────
+export default function PrintClient({
+  client, ff, riskAnswers, goals, loans, family, behaviour, knowledge, investments,
+}: Props) {
+  const printedAt = new Date().toLocaleDateString("en-IN", {
+    day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 
   return (
     <>
-      {/* Print button — hidden on actual print */}
+      {/* Toolbar — hidden on print */}
       <div className="print:hidden bg-[#0F3A46] text-white px-6 py-3 flex items-center justify-between">
         <div>
           <p className="text-xs text-[#A0C4CE]">Client Questionnaire — Print / PDF</p>
@@ -66,7 +112,7 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
         </button>
       </div>
 
-      {/* Print body */}
+      {/* Document body */}
       <div className="max-w-4xl mx-auto p-8 print:p-6 print:max-w-none font-sans text-gray-900">
 
         {/* Header */}
@@ -85,16 +131,16 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
         {/* 1. Personal */}
         <Section title="1. Personal Details">
           <Grid>
-            <Row label="Full name"          value={fmt(client.full_name)} />
-            <Row label="Date of birth"       value={fmtDate(client.dob)} />
-            <Row label="PAN"                 value={fmt(client.pan)} />
-            <Row label="Email"               value={fmt(client.email)} />
-            <Row label="Mobile"              value={fmt(client.phone)} />
-            <Row label="Gender"              value={fmt(client.gender)} />
-            <Row label="Marital status"      value={fmt(client.marital_status)} />
-            <Row label="Residential status"  value={fmt(client.residential_status)} />
-            <Row label="Client type"         value={fmt(client.client_type)} />
-            <Row label="Nationality"         value={fmt(client.nationality)} />
+            <Row label="Full name"           value={fmt(client.full_name)} />
+            <Row label="Date of birth"        value={fmtDate(client.dob)} />
+            <Row label="PAN"                  value={fmt(client.pan)} />
+            <Row label="Email"                value={fmt(client.email)} />
+            <Row label="Mobile"               value={fmt(client.phone)} />
+            <Row label="Gender"               value={fmt(client.gender)} />
+            <Row label="Marital status"       value={fmt(client.marital_status)} />
+            <Row label="Residential status"   value={fmt(client.residential_status)} />
+            <Row label="Client type"          value={fmt(client.client_type)} />
+            <Row label="Nationality"          value={fmt(client.nationality)} />
           </Grid>
           <div className="mt-1">
             <Row label="Address" value={fmt(client.address)} />
@@ -104,15 +150,15 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
         {/* 2. Employment */}
         <Section title="2. Employment & Background">
           <Grid>
-            <Row label="Occupation"           value={fmt(client.occupation)} />
-            <Row label="Employer"             value={fmt(client.employer)} />
-            <Row label="Industry / Sector"    value={fmt(client.industry)} />
-            <Row label="Years of experience"  value={fmt(client.years_exp)} />
-            <Row label="Career stage"         value={fmt(client.career_stage)} />
-            <Row label="Education"            value={fmt(client.education)} />
-            <Row label="Owns a business"      value={fmtBool(client.owns_business)} />
-            <Row label="Sole earner"          value={fmtBool(client.sole_earner)} />
-            <Row label="Expecting inheritance" value={fmtBool(client.expecting_inheritance)} />
+            <Row label="Occupation"             value={fmt(client.occupation)} />
+            <Row label="Employer"               value={fmt(client.employer)} />
+            <Row label="Industry / Sector"      value={fmt(client.industry)} />
+            <Row label="Years of experience"    value={fmt(client.years_exp)} />
+            <Row label="Career stage"           value={fmt(client.career_stage)} />
+            <Row label="Education"              value={fmt(client.education)} />
+            <Row label="Owns a business"        value={fmtBool(client.owns_business)} />
+            <Row label="Sole earner"            value={fmtBool(client.sole_earner)} />
+            <Row label="Expecting inheritance"  value={fmtBool(client.expecting_inheritance)} />
             <Row label="Planning career change" value={fmtBool(client.plan_change)} />
           </Grid>
           {client.dependants_detail && (
@@ -126,20 +172,20 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
         {ff && (
           <Section title="3. Financial Profile">
             <Grid>
-              <Row label="Self income (p.a.)"     value={fmtMoney(ff.income_self)} />
-              <Row label="Spouse income (p.a.)"   value={fmtMoney(ff.income_spouse)} />
-              <Row label="Other income (p.a.)"    value={fmtMoney(ff.income_other)} />
-              <Row label="Life cover"             value={fmtMoney(ff.life_cover)} />
-              <Row label="Target retirement age"  value={fmt(ff.retirement_age)} />
-              <Row label="Will in place"          value={fmt(ff.will_status)} />
-              <Row label="Politically exposed"    value={fmt(ff.pep)} />
-              <Row label="FATCA applicable"       value={fmt(ff.fatca)} />
+              <Row label="Self income (p.a.)"    value={fmtMoney(ff.income_self)} />
+              <Row label="Spouse income (p.a.)"  value={fmtMoney(ff.income_spouse)} />
+              <Row label="Other income (p.a.)"   value={fmtMoney(ff.income_other)} />
+              <Row label="Life cover"            value={fmtMoney(ff.life_cover)} />
+              <Row label="Target retirement age" value={fmt(ff.retirement_age)} />
+              <Row label="Will in place"         value={fmt(ff.will_status)} />
+              <Row label="Politically exposed"   value={fmt(ff.pep)} />
+              <Row label="FATCA applicable"      value={fmt(ff.fatca)} />
             </Grid>
           </Section>
         )}
 
         {/* 4. Insurance & Estate */}
-        {ff && (ff.health_cover || ff.trust_status || ff.poa_status) && (
+        {ff && (ff.health_cover != null || ff.trust_status || ff.poa_status) && (
           <Section title="4. Insurance & Estate Planning">
             <Grid>
               <Row label="Health cover (sum insured)" value={fmtMoney(ff.health_cover)} />
@@ -149,7 +195,11 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
               <Row label="Power of attorney"           value={fmt(ff.poa_status)} />
               <Row label="Guardian appointed"          value={fmt(ff.guardian_status)} />
             </Grid>
-            {ff.covers_held && <div className="mt-1"><Row label="Other covers held" value={fmt(ff.covers_held)} /></div>}
+            {ff.covers_held && (
+              <div className="mt-1">
+                <Row label="Other covers held" value={fmt(ff.covers_held)} />
+              </div>
+            )}
           </Section>
         )}
 
@@ -166,7 +216,7 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
               </thead>
               <tbody>
                 {family.map((f, i) => (
-                  <tr key={i} className="border-b border-gray-100">
+                  <tr key={i}>
                     <td className="py-1 px-2 border border-gray-200">{fmt(f.name)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmt(f.relationship)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmt(f.age)}</td>
@@ -193,14 +243,14 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
               </thead>
               <tbody>
                 {goals.map((g, i) => (
-                  <tr key={i} className="border-b border-gray-100">
+                  <tr key={i}>
                     <td className="py-1 px-2 border border-gray-200 font-medium">{fmt(g.goal_name)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmt(g.target_year)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmtMoney(g.cost_today)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmtMoney(g.saved)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmtMoney(g.monthly_sip)}</td>
-                    <td className="py-1 px-2 border border-gray-200">{g.inflation_pct ? `${g.inflation_pct}%` : "—"}</td>
-                    <td className="py-1 px-2 border border-gray-200">{g.return_pct ? `${g.return_pct}%` : "—"}</td>
+                    <td className="py-1 px-2 border border-gray-200">{fmtPct(g.inflation_pct)}</td>
+                    <td className="py-1 px-2 border border-gray-200">{fmtPct(g.return_pct)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmt(g.priority)}</td>
                   </tr>
                 ))}
@@ -222,12 +272,12 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
               </thead>
               <tbody>
                 {loans.map((l, i) => (
-                  <tr key={i} className="border-b border-gray-100">
+                  <tr key={i}>
                     <td className="py-1 px-2 border border-gray-200">{fmt(l.loan_type)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmt(l.lender)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmtMoney(l.outstanding)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmtMoney(l.emi)}</td>
-                    <td className="py-1 px-2 border border-gray-200">{l.rate ? `${l.rate}%` : "—"}</td>
+                    <td className="py-1 px-2 border border-gray-200">{fmtPct(l.rate)}</td>
                     <td className="py-1 px-2 border border-gray-200">{fmt(l.tenure_months)}</td>
                   </tr>
                 ))}
@@ -241,26 +291,22 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
           <Section title="8. Existing Investments">
             <div className="grid grid-cols-2 gap-x-8">
               {investments.map((inv, i) => (
-                <Row key={i}
-                  label={inv.asset_class.replace(/_/g, " ")}
-                  value={fmtMoney(inv.value)} />
+                <Row key={i} label={inv.asset_class.replace(/_/g, " ")} value={fmtMoney(inv.value)} />
               ))}
             </div>
           </Section>
         )}
 
-        {/* 9. Risk Questionnaire Answers */}
+        {/* 9. Risk Questionnaire */}
         {riskAnswers.length > 0 && (
           <Section title="9. Risk Profile Questionnaire">
             <div className="space-y-3">
               {ALL_RISK_QUESTIONS.map(q => {
                 const ans = riskAnswers.find(r => r.question_num === q.num);
                 const selectedOpt = q.options.find(o => o.letter === ans?.answer);
-                const sectionBg = q.section === "capacity"
-                  ? "bg-[#EBF3F5]"
-                  : q.section === "tolerance"
-                    ? "bg-[#FEF9E7]"
-                    : "bg-[#F3EEF8]";
+                const sectionBg =
+                  q.section === "capacity" ? "bg-[#EBF3F5]" :
+                  q.section === "tolerance" ? "bg-[#FEF9E7]" : "bg-[#F3EEF8]";
                 return (
                   <div key={q.num} className={`rounded-lg p-3 ${sectionBg}`}>
                     <p className="text-xs font-semibold text-[#0F3A46] mb-1.5">
@@ -284,9 +330,9 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
         {/* 10. Behaviour */}
         {behaviour && (
           <Section title="10. Behavioural Profile">
-            <Row label="Reaction to 30% drop"       value={fmt(behaviour.beh1)} />
-            <Row label="Performance chasing history" value={fmt(behaviour.beh2)} />
-            <Row label="Portfolio check frequency"   value={fmt(behaviour.beh3)} />
+            <Row label="Reaction to 30% drop"        value={fmt(behaviour.beh1)} />
+            <Row label="Performance chasing history"  value={fmt(behaviour.beh2)} />
+            <Row label="Portfolio check frequency"    value={fmt(behaviour.beh3)} />
           </Section>
         )}
 
@@ -308,7 +354,6 @@ export default function PrintClient({ client, ff, riskAnswers, goals, loans, fam
         </div>
       </div>
 
-      {/* Print CSS */}
       <style jsx global>{`
         @media print {
           @page { margin: 1.5cm 2cm; size: A4; }
