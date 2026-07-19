@@ -85,17 +85,8 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      {/* Submit panel with identity validation */}
-      <SubmitPanel
-        clientId={id}
-        prefill={{
-          full_name: client.full_name ?? "",
-          pan:       client.pan ?? "",
-          dob:       client.dob ?? "",
-          phone:     (client.phone as string | null) ?? "",
-          email:     (client.email as string | null) ?? "",
-        }}
-      />
+      {/* Upload & validate submitted PDF */}
+      <SubmitPanel clientId={id} />
     </div>
   );
 }
