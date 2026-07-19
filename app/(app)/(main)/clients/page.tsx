@@ -39,18 +39,14 @@ export default async function ClientsPage() {
           <Link href="/clients/new" className="inline-block bg-[#0F3A46] text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-[#175A69]">
             + New Client
           </Link>
-          <Link href="/upload" className="inline-block bg-[#C39A38] text-[#0F3A46] text-sm font-medium rounded-lg px-4 py-2 hover:bg-[#B08930]">
-            Load questionnaire
-          </Link>
+
         </div>
       </div>
 
       {rows.length === 0 ? (
         <div className="bg-white border border-[#CBD9DC] rounded-xl p-6">
           <p className="text-sm text-[#0F3A46] mb-3">No clients loaded yet.</p>
-          <Link href="/upload" className="inline-block bg-[#C39A38] text-[#0F3A46] text-sm font-medium rounded-md px-4 py-2">
-            Load your first questionnaire
-          </Link>
+
         </div>
       ) : (
         <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
@@ -92,9 +88,6 @@ export default async function ClientsPage() {
                     {client.updated_at ? new Date(client.updated_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-3 py-2.5">
-                    <Link href={`/clients/${client.client_id}/questionnaire`} className="text-[#C39A38] text-xs font-medium hover:underline mr-3">
-                      Questionnaire
-                    </Link>
                     <Link href={`/clients/${client.client_id}`} className="text-[#175A69] text-xs font-medium hover:underline">
                       Open →
                     </Link>

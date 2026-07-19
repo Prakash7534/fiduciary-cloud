@@ -130,14 +130,8 @@ export async function GET(
   chk(form, "sole_earner",     cl.sole_earner === true);
 
 
-  // ── Lock all pre-filled Section A fields (non-editable by client) ─────────
-  ["client_name","pan","dob","gender","marital_status","phone","email","address",
-   "occupation","employer","education","dependants_detail","nationality","industry","years_exp",
-   "f_1","f_2"].forEach(n => lock(form, n));
-  ["ctype_individual","ctype_huf","ctype_nri","ctype_corporate","ctype_trust","ctype_other",
-   "resi_indian","resi_nri","resi_pio","resi_foreign",
-   "career_early","career_growth","career_peak","career_pre","career_retired",
-   "exp_inheritance","own_business","plan_change","sole_earner"].forEach(n => lockChk(form, n));
+  // ── Lock only identity fields — non-editable by client ───────────────────
+  ["client_name","pan","dob","phone","email"].forEach(n => lock(form, n));
 
   // ── SECTION B — Financial Situation ───────────────────────────────────────
   if (ff) {
