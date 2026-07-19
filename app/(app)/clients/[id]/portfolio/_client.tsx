@@ -2,6 +2,7 @@
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { AllocationPlan, UniverseRow, GoalInput } from "@/lib/allocationEngine";
+import { buildGapPlan, currentValueByClass, proposeInstruments } from "@/lib/constructionEngine";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Status = "draft" | "pending" | "placed" | "executed";
@@ -428,6 +429,9 @@ export default function PortfolioClient({
   const [holdings, setHoldings] = useState<Holding[]>(initHoldings);
   const [activityLog, setActivityLog] = useState<LogEntry[]>(initLog);
   const [showAdd, setShowAdd] = useState(false);
+  // ── New investment (gap-based construction) ────────────────────────────────
+  const [newLump, setNewLump] = useState(0);
+  const [newSipAmt, setNewSipAmt] = useState(0);
   const [showAddHolding, setShowAddHolding] = useState(false);
   const [swapTarget, setSwapTarget] = useState<number | null>(null);
   const [saving, setSaving] = useState(false); const [saved, setSaved] = useState(false);
@@ -571,6 +575,31 @@ export default function PortfolioClient({
   const swapPos = swapTarget !== null ? positions[swapTarget] : null;
   const filteredLog = logFilter === "all" ? activityLog : activityLog.filter(e => e.action_type === logFilter);
 
+  // ── Gap-based construction plan ──────────────────────────────────────────
+  const curByClass = currentValueByClass(positions, holdings);
+  const gapPlan = buildGapPlan(plan.assetAllocation, curByClass, newLump, newSipAmt);
+
+  const buildFromGap = () => {
+    if (newLump <= 0 && newSipAmt <= 0) return;
+    const proposed = proposeInstruments(universe, gapPlan, concentrationCap,
+      positions.filter(p => p.status !== "executed").map(p => p.instrument_id));
+    const totAfter = gapPlan.totalCurrent + gapPlan.newLumpsum;
+    const newPos: Position[] = proposed.map(l => ({
+      instrument_id: l.instrument_id, instrument_name: l.name,
+      asset_class: l.asset_class, category: l.category,
+      bucket: l.asset_class === "Debt" ? "short" : l.asset_class === "Hybrid" || l.asset_class === "Gold" ? "medium" : "long",
+      goal_id: null,
+      allocation_pct: totAfter > 0 ? Math.round(l.lumpsum / totAfter * 1000) / 10 : l.weightPct,
+      max_allocation_pct: concentrationCap,
+      lumpsum_amount: l.lumpsum, monthly_sip: l.sip,
+      executed_lumpsum: 0, executed_sip: 0, current_value: null, executed_at: null,
+      status: "draft", notes: "Gap-based proposal", source: "engine",
+    }));
+    // Keep executed positions, replace open proposals
+    setPositions(prev => [...prev.filter(p => p.status === "executed"), ...newPos]);
+    setSaved(false);
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -584,7 +613,7 @@ export default function PortfolioClient({
         </div>
         {mainTab === "construction" && (
           <div className="flex gap-2">
-            <button onClick={buildFromPlan} className="px-3 py-1.5 text-xs border border-[#175A69] text-[#175A69] rounded-lg hover:bg-[#DDE6E8]">Build from allocation plan</button>
+            <button onClick={buildFromPlan} className="px-3 py-1.5 text-xs border border-[#CBD9DC] text-[#6B7E86] rounded-lg hover:bg-[#F5F9FA]" title="Legacy: build from goal-bucket plan, ignoring current holdings">Build from goal buckets</button>
             <button onClick={() => setShowAdd(true)} className="px-3 py-1.5 text-xs border border-[#CBD9DC] text-[#0F3A46] rounded-lg hover:bg-[#F5F9FA]">+ Add position</button>
             <button onClick={savePortfolio} disabled={saving} className="px-4 py-1.5 bg-[#0F3A46] text-white text-sm font-medium rounded-lg hover:bg-[#175A69] disabled:opacity-50">
               {saving ? "Saving..." : saved ? "✓ Saved" : "Save plan"}
@@ -634,6 +663,88 @@ export default function PortfolioClient({
       {/* ── CONSTRUCTION TAB ───────────────────────────────────────────────── */}
       {mainTab === "construction" && (
         <>
+          {/* ── STEP 1 · New investment + gap analysis ─────────────────────── */}
+          <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#E7EFEF] bg-[#0F3A46] flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-white">Step 1 — New investment &amp; SAA gap analysis</h2>
+                <p className="text-[10px] text-[#A0C4CE] mt-0.5">Enter the amount the client is investing now. The engine steers it toward the {plan.profile} target allocation, closing the largest gaps first.</p>
+              </div>
+              <div className="flex items-end gap-3">
+                <div>
+                  <label className="block text-[10px] text-[#A0C4CE] mb-0.5">Lumpsum (Rs.)</label>
+                  <input type="number" min={0} value={newLump || ""} onChange={e => setNewLump(Number(e.target.value) || 0)}
+                    placeholder="0" className="w-28 px-2 py-1.5 rounded-lg text-sm text-[#0F3A46] bg-white border border-[#CBD9DC] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-[#A0C4CE] mb-0.5">Monthly SIP (Rs./mo)</label>
+                  <input type="number" min={0} value={newSipAmt || ""} onChange={e => setNewSipAmt(Number(e.target.value) || 0)}
+                    placeholder="0" className="w-28 px-2 py-1.5 rounded-lg text-sm text-[#0F3A46] bg-white border border-[#CBD9DC] outline-none" />
+                </div>
+                <button onClick={() => setNewSipAmt(Math.round(plan.totalMonthlySIP))}
+                  className="px-2.5 py-1.5 text-[10px] border border-[#3E6B78] text-[#A0C4CE] rounded-lg hover:bg-[#175A69]"
+                  title="Use the SIP the goal engine calculated as required">
+                  Use goal SIP ({fmtMo(plan.totalMonthlySIP)})
+                </button>
+              </div>
+            </div>
+
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-[#6B7E86] border-b border-[#E7EFEF] bg-[#FAFCFC]">
+                  <th className="text-left px-4 py-2 font-medium">Asset class</th>
+                  <th className="text-right px-2 py-2 font-medium">SAA target</th>
+                  <th className="text-right px-2 py-2 font-medium">Current value</th>
+                  <th className="text-right px-2 py-2 font-medium">Current %</th>
+                  <th className="text-right px-2 py-2 font-medium">Gap to target</th>
+                  <th className="text-right px-2 py-2 font-medium">← New lumpsum</th>
+                  <th className="text-right px-4 py-2 font-medium">← New SIP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gapPlan.classes.map(g => {
+                  const under = g.gapValue > 0;
+                  return (
+                    <tr key={g.assetClass} className="border-b border-[#E7EFEF]">
+                      <td className="px-4 py-2">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full" style={{ background: AC_COLOR[g.assetClass] ?? "#999" }} />
+                          <span className="font-medium text-[#0F3A46] text-xs">{g.assetClass}</span>
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-right text-xs font-semibold text-[#0F3A46]">{g.targetPct}%</td>
+                      <td className="px-2 py-2 text-right text-xs text-[#0F3A46]">{fmt(g.currentValue)}</td>
+                      <td className="px-2 py-2 text-right text-xs">
+                        <span className={Math.abs(g.currentPct - g.targetPct) <= 2 ? "text-[#2E7D5B]" : "text-[#B4463C]"}>
+                          {gapPlan.totalCurrent > 0 ? g.currentPct.toFixed(1) + "%" : "—"}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-right text-xs">
+                        <span className={under ? "text-[#B4463C] font-medium" : "text-[#2E7D5B]"}>
+                          {g.gapValue === 0 ? "—" : (under ? "▼ short " : "▲ over ") + fmt(Math.abs(Math.round(g.gapValue)))}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-right text-xs font-semibold text-[#175A69]">{g.allocLumpsum > 0 ? fmt(g.allocLumpsum) : "—"}</td>
+                      <td className="px-4 py-2 text-right text-xs font-semibold text-[#175A69]">{g.allocSip > 0 ? fmtMo(g.allocSip) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="px-5 py-3 bg-[#F5F9FA] flex items-center justify-between flex-wrap gap-2">
+              <p className="text-[10px] text-[#6B7E86]">
+                Current portfolio: <strong className="text-[#0F3A46]">{fmt(gapPlan.totalCurrent)}</strong>
+                {" · "}After this investment max drift vs SAA: <strong className={gapPlan.postLumpsumDriftPct <= 3 ? "text-[#2E7D5B]" : "text-[#B4463C]"}>{gapPlan.postLumpsumDriftPct}%</strong>
+                {" · "}Executed positions are preserved; open proposals get replaced.
+              </p>
+              <button onClick={buildFromGap} disabled={newLump <= 0 && newSipAmt <= 0}
+                className="px-4 py-2 text-sm bg-[#C39A38] text-[#0F3A46] font-semibold rounded-lg hover:bg-[#B08930] disabled:opacity-40">
+                Step 2 — Build proposal from gaps →
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-5 gap-3">
             {[
               { label: "Positions",    value: String(positions.length),        sub: "total" },
@@ -669,11 +780,9 @@ export default function PortfolioClient({
 
           {positions.length === 0 && (
             <div className="bg-white border border-dashed border-[#CBD9DC] rounded-xl p-10 text-center">
-              <p className="text-sm text-[#6B7E86] mb-4">No positions yet.</p>
-              <div className="flex gap-3 justify-center">
-                <button onClick={buildFromPlan} className="px-4 py-2 text-sm bg-[#0F3A46] text-white rounded-lg">Build from allocation plan</button>
-                <button onClick={() => setShowAdd(true)} className="px-4 py-2 text-sm border border-[#CBD9DC] text-[#0F3A46] rounded-lg">Add manually</button>
-              </div>
+              <p className="text-sm text-[#0F3A46] font-medium mb-1">No positions yet.</p>
+              <p className="text-xs text-[#6B7E86] mb-4">Enter the client&apos;s investable amount in Step 1 above, then click &quot;Build proposal from gaps&quot; — the engine will construct the portfolio toward the SAA target.</p>
+              <button onClick={() => setShowAdd(true)} className="px-4 py-2 text-sm border border-[#CBD9DC] text-[#0F3A46] rounded-lg">Or add a position manually</button>
             </div>
           )}
 
@@ -750,10 +859,20 @@ export default function PortfolioClient({
                         <td className="px-2 py-2.5 text-right">
                           <input type="number" min={0} value={pos.executed_lumpsum} onChange={e => updatePosition(globalIdx, { executed_lumpsum: Number(e.target.value) })}
                             className={"w-20 text-right border rounded px-1 py-0.5 text-xs focus:outline-none " + (isExecuted ? "border-[#2E7D5B] bg-[#F0FAF4]" : "border-[#E7EFEF] focus:border-[#175A69]")} />
+                          {isExecuted && pos.lumpsum_amount > 0 && pos.executed_lumpsum !== pos.lumpsum_amount && (
+                            <div className={"text-[9px] mt-0.5 font-medium " + (pos.executed_lumpsum > pos.lumpsum_amount ? "text-[#175A69]" : "text-[#B4463C]")}>
+                              {pos.executed_lumpsum > pos.lumpsum_amount ? "▲" : "▼"} {Math.round(Math.abs(pos.executed_lumpsum - pos.lumpsum_amount) / pos.lumpsum_amount * 100)}% vs proposed
+                            </div>
+                          )}
                         </td>
                         <td className="px-2 py-2.5 text-right">
                           <input type="number" min={0} value={pos.executed_sip} onChange={e => updatePosition(globalIdx, { executed_sip: Number(e.target.value) })}
                             className={"w-20 text-right border rounded px-1 py-0.5 text-xs focus:outline-none " + (isExecuted ? "border-[#2E7D5B] bg-[#F0FAF4]" : "border-[#E7EFEF] focus:border-[#175A69]")} />
+                          {isExecuted && pos.monthly_sip > 0 && pos.executed_sip !== pos.monthly_sip && (
+                            <div className={"text-[9px] mt-0.5 font-medium " + (pos.executed_sip > pos.monthly_sip ? "text-[#175A69]" : "text-[#B4463C]")}>
+                              {pos.executed_sip > pos.monthly_sip ? "▲" : "▼"} {Math.round(Math.abs(pos.executed_sip - pos.monthly_sip) / pos.monthly_sip * 100)}% vs proposed
+                            </div>
+                          )}
                         </td>
                         <td className="px-2 py-2.5 text-right">
                           <input type="number" min={0} value={pos.current_value ?? ""} onChange={e => updatePosition(globalIdx, { current_value: e.target.value ? Number(e.target.value) : null })}
@@ -787,19 +906,27 @@ export default function PortfolioClient({
           {positions.length > 0 && (
             <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
               <div className="px-5 py-3 border-b border-[#E7EFEF] bg-[#F5F9FA]">
-                <h2 className="text-sm font-semibold text-[#0F3A46]">SAA reference</h2>
+                <h2 className="text-sm font-semibold text-[#0F3A46]">Projected allocation after this proposal executes</h2>
+                <p className="text-[10px] text-[#6B7E86] mt-0.5">Current holdings + proposed lumpsum per class, compared with the SAA target.</p>
               </div>
               <div className="p-5 grid grid-cols-6 gap-3">
                 {Object.entries(plan.assetAllocation).map(([ac, pct]) => {
-                  const pp = positions.filter(p => p.asset_class === ac).reduce((s, p) => s + p.allocation_pct, 0);
-                  const diff = pp - pct;
+                  const cur = curByClass[ac] ?? 0;
+                  const propLump = positions.filter(p => p.asset_class === ac && p.status !== "executed").reduce((s, p) => s + p.lumpsum_amount, 0);
+                  const totAfter = gapPlan.totalCurrent + positions.filter(p => p.status !== "executed").reduce((s, p) => s + p.lumpsum_amount, 0);
+                  const projPct = totAfter > 0 ? (cur + propLump) / totAfter * 100 : 0;
+                  const diff = projPct - pct;
                   return (
                     <div key={ac} className="text-center">
                       <div className="w-2.5 h-2.5 rounded-full mx-auto mb-1" style={{ background: AC_COLOR[ac] ?? "#999" }} />
                       <div className="text-xs font-medium text-[#0F3A46] truncate">{ac}</div>
                       <div className="text-sm font-semibold text-[#0F3A46]">{pct}%</div>
                       <div className="text-[10px] text-[#6B7E86]">target</div>
-                      {pp > 0 && <div className={"text-[10px] font-medium mt-0.5 " + (Math.abs(diff) <= 2 ? "text-[#2E7D5B]" : "text-[#B4463C]")}>{pp}% {diff !== 0 ? "(" + (diff > 0 ? "+" : "") + diff.toFixed(0) + ")" : "✓"}</div>}
+                      {totAfter > 0 && (
+                        <div className={"text-[10px] font-medium mt-0.5 " + (Math.abs(diff) <= 2 ? "text-[#2E7D5B]" : "text-[#B4463C]")}>
+                          → {projPct.toFixed(1)}% {Math.abs(diff) <= 2 ? "✓" : "(" + (diff > 0 ? "+" : "") + diff.toFixed(1) + ")"}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
