@@ -71,7 +71,11 @@ export default async function PersonalPage({ params }: { params: Promise<{ id: s
       </div>
 
       {/* Top stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <div className="bg-[#EBF3F5] border border-[#C8D8DB] rounded-xl p-4">
+          <div className="text-xs text-[#175A69] font-medium mb-1">Client code</div>
+          <div className="font-mono font-bold text-[#0F3A46] tracking-wide">{client.client_code ?? "—"}</div>
+        </div>
         <StatCard label="Client type" value={client.client_type} />
         <StatCard label="Residential status" value={client.residential_status} />
         <StatCard label="PAN" value={client.pan} />

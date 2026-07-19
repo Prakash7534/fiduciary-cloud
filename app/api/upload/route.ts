@@ -56,8 +56,16 @@ export async function POST(req: NextRequest) {
   }
 
   if (isNew) {
+    // Generate unique client code via DB function (collision-safe)
+    const { data: codeData, error: codeErr } = await supabase
+      .rpc("generate_client_code", { p_user_id: user.id });
+    const clientCode: string | null = codeErr ? null : (codeData as string);
+
     const { data, error } = await supabase
-      .from("clients").insert({ ...clientFields, user_id: user.id }).select("client_id").single();
+      .from("clients")
+      .insert({ ...clientFields, user_id: user.id, client_code: clientCode })
+      .select("client_id")
+      .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     clientId = data.client_id;
   } else {
