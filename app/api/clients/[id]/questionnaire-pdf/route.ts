@@ -192,8 +192,8 @@ export async function GET(
 
     goals.slice(0, 6).forEach((g: Record<string, unknown>, i: number) => {
       const n = i + 1;
-      txt(form, `goal${n}_name`,  g.goal_name);
-      txt(form, `goal${n}_year`,  g.target_year);
+      txt(form, `goal${n}_name`,  g.goal_name as string);
+      txt(form, `goal${n}_year`,  g.target_year as string);
       txt(form, `goal${n}_cost`,  fmt(g.target_amount as number));
       txt(form, `goal${n}_saved`, fmt(g.current_savings as number));
       txt(form, `goal${n}_sip`,   fmt(g.monthly_sip as number));
@@ -206,11 +206,11 @@ export async function GET(
   if (loans && loans.length > 0) {
     loans.slice(0, 9).forEach((l: Record<string, unknown>, i: number) => {
       const n = i + 1;
-      txt(form, `loan${n}_lender`, l.lender);
+      txt(form, `loan${n}_lender`, l.lender as string);
       txt(form, `loan${n}_out`,    fmt(l.outstanding as number));
       txt(form, `loan${n}_emi`,    fmt(l.emi as number));
-      txt(form, `loan${n}_rate`,   l.interest_rate);
-      txt(form, `loan${n}_tenure`, l.tenure_months);
+      txt(form, `loan${n}_rate`,   l.interest_rate as string);
+      txt(form, `loan${n}_tenure`, l.tenure_months as number);
     });
   }
 
@@ -218,12 +218,12 @@ export async function GET(
   if (family && family.length > 0) {
     family.slice(0, 4).forEach((f: Record<string, unknown>, i: number) => {
       const n = i + 1;
-      txt(form, `fam${n}_name`,   f.name);
-      txt(form, `fam${n}_rel`,    f.relationship);
-      txt(form, `fam${n}_age`,    f.age);
-      txt(form, `fam${n}_occ`,    f.occupation);
+      txt(form, `fam${n}_name`,   f.name as string);
+      txt(form, `fam${n}_rel`,    f.relationship as string);
+      txt(form, `fam${n}_age`,    f.age as number);
+      txt(form, `fam${n}_occ`,    f.occupation as string);
       txt(form, `fam${n}_income`, fmt(f.income as number));
-      txt(form, `fam${n}_health`, f.health_status);
+      txt(form, `fam${n}_health`, f.health_status as string);
     });
   }
 
