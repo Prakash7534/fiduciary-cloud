@@ -135,8 +135,8 @@ export default function QuestionnaireForm({ clientCode, clientName, onSubmit, pr
   const [personal, setPersonal] = useState({
     full_name: prefill?.full_name ?? "", dob: prefill?.dob ?? "",
     pan: prefill?.pan ?? "", email: prefill?.email ?? "", phone: prefill?.phone ?? "",
-    gender: prefill?.gender ?? "", marital_status: "", nationality: "Indian",
-    address: "", client_type: "Individual", residential_status: "Resident Indian",
+    gender: prefill?.gender ?? "", marital_status: prefill?.marital_status ?? "", nationality: prefill?.nationality ?? "Indian",
+    address: prefill?.address ?? "", client_type: "Individual", residential_status: "Resident Indian",
   });
   const sp = (k: keyof typeof personal) => (v: string) => setPersonal(p => ({ ...p, [k]: v }));
 

@@ -49,10 +49,10 @@ export default async function PublicQPage({ params }: { params: Promise<{ token:
     );
   }
 
-  // Fetch client name + code
+  // Fetch all pre-fillable client fields
   const { data: client } = await supabase
     .from("clients")
-    .select("full_name, client_code, dob, pan, gender, occupation")
+    .select("full_name, client_code, dob, pan, email, phone, gender, marital_status, nationality, address, occupation")
     .eq("client_id", link.client_id)
     .maybeSingle();
 
@@ -68,13 +68,18 @@ export default async function PublicQPage({ params }: { params: Promise<{ token:
           token={token}
           clientId={link.client_id}
           clientName={client?.full_name ?? ""}
-          clientCode={client?.client_code ?? token.slice(0, 8).toUpperCase()}
+          clientCode={client?.client_code ?? ""}
           prefill={{
-            full_name: client?.full_name ?? undefined,
-            dob: client?.dob ?? undefined,
-            pan: client?.pan ?? undefined,
-            gender: (client?.gender as string | undefined) ?? undefined,
-            occupation: (client?.occupation as string | undefined) ?? undefined,
+            full_name:      client?.full_name      ?? undefined,
+            dob:            client?.dob            ?? undefined,
+            pan:            client?.pan            ?? undefined,
+            email:          client?.email          ?? undefined,
+            phone:          client?.phone          ?? undefined,
+            gender:         (client?.gender as string | undefined)          ?? undefined,
+            marital_status: (client?.marital_status as string | undefined)  ?? undefined,
+            nationality:    (client?.nationality as string | undefined)     ?? undefined,
+            address:        (client?.address as string | undefined)         ?? undefined,
+            occupation:     (client?.occupation as string | undefined)      ?? undefined,
           }}
         />
         <p className="text-center text-[10px] text-[#6B7E86] mt-6">Your data is encrypted and shared only with your adviser. Powered by Fiduciary Cloud.</p>
