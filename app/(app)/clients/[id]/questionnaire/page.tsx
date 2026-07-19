@@ -20,20 +20,21 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
     .select("*", { count: "exact", head: true })
     .eq("client_id", id);
 
-  const { data: lastSubmit } = await supabase
-    .from("questionnaire_links")
-    .select("submitted_at")
+  // Activity log — latest 20 entries
+  const { data: activityLog } = await supabase
+    .from("client_activity_log")
+    .select("log_id, event_type, description, performed_by, notes, metadata, created_at")
     .eq("client_id", id)
-    .not("submitted_at", "is", null)
-    .order("submitted_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(20);
 
   const riskAnswered = answered ?? 0;
   const isComplete   = riskAnswered === 19;
-  const lastDate     = lastSubmit?.submitted_at
-    ? new Date(lastSubmit.submitted_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-    : null;
+
+  const eventLabel: Record<string, { label: string; icon: string; colour: string }> = {
+    questionnaire_submitted:         { label: "Questionnaire submitted",        icon: "✅", colour: "text-[#2E7D5B]" },
+    questionnaire_validation_failed: { label: "Validation failed",              icon: "⚠",  colour: "text-[#B4463C]" },
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
@@ -56,7 +57,6 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
             {isComplete ? "Questionnaire complete" : riskAnswered > 0 ? `In progress — ${riskAnswered}/19 risk questions answered` : "Questionnaire not yet submitted"}
           </p>
           <p className="text-xs text-[#6B7E86] mt-0.5">
-            {lastDate ? `Last submitted: ${lastDate} · ` : ""}
             UCC: <span className="font-mono font-semibold text-[#0F3A46]">{client.client_code ?? "—"}</span>
           </p>
         </div>
@@ -71,8 +71,7 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
               SEBI-compliant risk profiling form with identity details pre-filled and locked. Share with the client to complete and return signed.
             </p>
             <ul className="mt-2 space-y-0.5 text-xs text-[#6B7E86]">
-              <li>• Name, PAN, DOB, phone, email — pre-filled &amp; non-editable</li>
-              <li>• Date of assessment &amp; UCC — pre-filled &amp; non-editable</li>
+              <li>• Name, PAN, DOB, phone, email, UCC, date of assessment — pre-filled &amp; non-editable</li>
               <li>• All financial, risk &amp; goals sections — blank &amp; fillable</li>
             </ul>
           </div>
@@ -85,8 +84,58 @@ export default async function QuestionnairePage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      {/* Upload & validate submitted PDF */}
+      {/* Upload & validate */}
       <SubmitPanel clientId={id} />
+
+      {/* Activity log */}
+      <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-[#E7EFEF] flex items-center justify-between">
+          <p className="text-sm font-semibold text-[#0F3A46]">Activity log</p>
+          <span className="text-xs text-[#6B7E86]">{activityLog?.length ?? 0} events</span>
+        </div>
+
+        {!activityLog || activityLog.length === 0 ? (
+          <div className="px-6 py-8 text-center">
+            <p className="text-sm text-[#6B7E86]">No activity recorded yet.</p>
+            <p className="text-xs text-[#A8BDC3] mt-1">Upload a completed questionnaire to generate the first log entry.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[#E7EFEF]">
+            {activityLog.map((entry) => {
+              const meta = eventLabel[entry.event_type];
+              const ts   = new Date(entry.created_at);
+              const dateStr = ts.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+              const timeStr = ts.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+              const fileName = (entry.metadata as Record<string,unknown> | null)?.file_name as string | undefined;
+
+              return (
+                <div key={entry.log_id} className="px-6 py-4 flex items-start gap-3">
+                  <span className="text-base shrink-0 mt-0.5">{meta?.icon ?? "📌"}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                      <p className={"text-sm font-medium " + (meta?.colour ?? "text-[#0F3A46]")}>
+                        {meta?.label ?? entry.event_type}
+                      </p>
+                      <p className="text-xs text-[#6B7E86] whitespace-nowrap shrink-0">
+                        {dateStr} · {timeStr}
+                      </p>
+                    </div>
+                    {fileName && (
+                      <p className="text-xs text-[#4A6572] mt-0.5 font-mono">{fileName}</p>
+                    )}
+                    {entry.notes && (
+                      <p className="text-xs text-[#4A6572] mt-0.5 italic">{entry.notes}</p>
+                    )}
+                    {entry.performed_by && (
+                      <p className="text-[10px] text-[#A8BDC3] mt-1">By {entry.performed_by}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
