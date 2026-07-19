@@ -24,10 +24,12 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: client, error }, { data: goalsRaw }, { data: facts }] = await Promise.all([
+  const [{ data: client, error }, { data: goalsRaw }, { data: facts }, { data: positions }, { data: holdings }] = await Promise.all([
     supabase.from("clients").select("full_name, dob").eq("client_id", id).single(),
     supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
     supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
+    supabase.from("portfolio_positions").select("goal_id, status, executed_lumpsum, executed_sip, current_value").eq("client_id", id),
+    supabase.from("portfolio_holdings").select("current_value, lumpsum_invested, monthly_sip").eq("client_id", id),
   ]);
 
   if (error || !client) notFound();
@@ -37,12 +39,47 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   const expenses = (facts?.expenses_annual ?? 0) / 12;
   const surplus = income - expenses;
 
-  const calcs = goals.map(g => {
-    const c = goalCalc(g, THIS_YEAR);
-    // Lumpsum invested TODAY that would close the FV shortfall at the goal's return assumption
+  // ── Live portfolio values ──────────────────────────────────────────────────
+  const execPos = (positions ?? []).filter(p => p.status === "executed");
+  const posValue = (p: { current_value: number | null; executed_lumpsum: number | null }) =>
+    (p.current_value ?? 0) > 0 ? (p.current_value ?? 0) : (p.executed_lumpsum ?? 0);
+
+  // Value + SIP linked to a specific goal
+  const linkedValue: Record<string, number> = {};
+  const linkedSip: Record<string, number> = {};
+  let unlinkedValue = 0, unlinkedSip = 0;
+  execPos.forEach(p => {
+    const v = posValue(p); const s = p.executed_sip ?? 0;
+    if (p.goal_id) {
+      linkedValue[p.goal_id] = (linkedValue[p.goal_id] ?? 0) + v;
+      linkedSip[p.goal_id]   = (linkedSip[p.goal_id] ?? 0) + s;
+    } else { unlinkedValue += v; unlinkedSip += s; }
+  });
+  // Existing holdings are not goal-linked — treat as common pool
+  (holdings ?? []).forEach(h => {
+    unlinkedValue += (h.current_value ?? 0) > 0 ? (h.current_value ?? 0) : (h.lumpsum_invested ?? 0);
+    unlinkedSip   += h.monthly_sip ?? 0;
+  });
+  const totalLiveValue = unlinkedValue + Object.values(linkedValue).reduce((s, v) => s + v, 0);
+  const totalLiveSip   = unlinkedSip + Object.values(linkedSip).reduce((s, v) => s + v, 0);
+
+  // Distribute the unlinked pool across goals proportional to future-value weight
+  const fvWeights = goals.map(g => (g.cost_today ?? 0) * Math.pow(1 + (g.inflation_pct ?? 6) / 100, Math.max(0, (g.target_year ?? THIS_YEAR) - THIS_YEAR)));
+  const fvTotal = fvWeights.reduce((s, v) => s + v, 0);
+
+  const calcs = goals.map((g, gi) => {
+    const share = fvTotal > 0 ? fvWeights[gi] / fvTotal : (goals.length ? 1 / goals.length : 0);
+    const liveSaved = (linkedValue[g.goal_id] ?? 0) + unlinkedValue * share;
+    const liveSip   = (linkedSip[g.goal_id] ?? 0) + unlinkedSip * share;
+    // Merge live portfolio into the goal's static questionnaire figures
+    const gLive = { ...g,
+      saved:       (g.saved ?? 0) + liveSaved,
+      monthly_sip: (g.monthly_sip ?? 0) + liveSip,
+    };
+    const c = goalCalc(gLive, THIS_YEAR);
     const r = (g.return_pct ?? 10) / 100;
     const lumpsumNow = c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
-    return { g, c, lumpsumNow: Math.round(lumpsumNow) };
+    return { g: gLive, c, lumpsumNow: Math.round(lumpsumNow), liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip) };
   });
   const totalExtraSip   = calcs.reduce((s, { c }) => s + c.extraSip, 0);
   const totalLumpsumNow = calcs.reduce((s, x) => s + x.lumpsumNow, 0);
@@ -61,8 +98,9 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
           <div className="text-3xl font-bold font-serif text-[#0F3A46]">{goals.length}</div>
         </div>
         <div className="bg-white border border-[#CBD9DC] rounded-xl p-4">
-          <div className="text-xs text-[#6B7E86] mb-1">Monthly surplus available</div>
-          <div className="font-bold text-[#0F3A46]">{surplus > 0 ? fmtCr(surplus) : "—"}</div>
+          <div className="text-xs text-[#6B7E86] mb-1">Live portfolio counted</div>
+          <div className="font-bold text-[#0F3A46]">{totalLiveValue > 0 ? fmtCr(totalLiveValue) : "—"}</div>
+          <div className="text-[10px] text-[#6B7E86] mt-0.5">{totalLiveSip > 0 ? "+ " + fmtCr(totalLiveSip) + "/mo executed SIP" : "no executed positions yet"}</div>
         </div>
         <div className={`border rounded-xl p-4 ${totalExtraSip > 0 ? "bg-[#FFF7F6] border-[#E4B3AE]" : "bg-[#E4F1EA] border-[#B3D9C3]"}`}>
           <div className="text-xs text-[#6B7E86] mb-1">Additional SIP needed across all goals</div>
@@ -85,7 +123,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
         </div>
       ) : (
         <div className="space-y-4">
-          {calcs.map(({ g, c, lumpsumNow }, i) => {
+          {calcs.map(({ g, c, lumpsumNow, liveSaved, liveSip }, i) => {
             const fundedPct = c.fv > 0 ? Math.min(100, (c.path / c.fv) * 100) : 100;
             const isFunded = c.gap === 0;
             const barColor = fundedPct >= 90 ? FUNDED_COLOR : fundedPct >= 50 ? PARTIAL_COLOR : GAP_COLOR;
@@ -133,12 +171,14 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
                     <div className="font-semibold text-[#0F3A46]">{fmtCr(c.fv)}</div>
                   </div>
                   <div className="bg-[#F5F9FA] rounded-lg p-3">
-                    <div className="text-xs text-[#6B7E86] mb-1">Already saved</div>
+                    <div className="text-xs text-[#6B7E86] mb-1">Saved (incl. live portfolio)</div>
                     <div className="font-semibold text-[#0F3A46]">{g.saved ? fmtCr(g.saved) : "—"}</div>
+                    {liveSaved > 0 && <div className="text-[10px] text-[#175A69] mt-0.5">↳ {fmtCr(liveSaved)} from portfolio</div>}
                   </div>
                   <div className="bg-[#F5F9FA] rounded-lg p-3">
-                    <div className="text-xs text-[#6B7E86] mb-1">Current SIP</div>
+                    <div className="text-xs text-[#6B7E86] mb-1">SIP (incl. live portfolio)</div>
                     <div className="font-semibold text-[#0F3A46]">{g.monthly_sip ? fmtCr(g.monthly_sip) + "/mo" : "—"}</div>
+                    {liveSip > 0 && <div className="text-[10px] text-[#175A69] mt-0.5">↳ {fmtCr(liveSip)}/mo from portfolio</div>}
                   </div>
                 </div>
 
@@ -173,7 +213,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
 
       {/* Assumptions note */}
       <div className="bg-white border border-[#CBD9DC] rounded-xl p-4 text-xs text-[#6B7E86]">
-        <strong className="text-[#0F3A46]">Assumptions:</strong> Inflation per goal defaults to 6% p.a. unless specified in questionnaire.
+        <strong className="text-[#0F3A46]">Assumptions:</strong> Figures are dynamic — executed portfolio positions (current value &amp; SIP) are counted toward goals: positions linked to a goal count fully to it; unlinked positions and existing holdings are apportioned across goals by target size. Inflation per goal defaults to 6% p.a. unless specified in questionnaire.
         Return assumption defaults to 10% p.a. Projections are indicative — actual returns will vary.
         Past SIP contributions are assumed to have grown at the stated return rate.
       </div>
