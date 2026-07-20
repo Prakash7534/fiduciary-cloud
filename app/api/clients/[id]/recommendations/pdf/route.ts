@@ -30,15 +30,19 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
   return lines;
 }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+  const recId = req.nextUrl.searchParams.get("rec");
+
+  let recQuery = supabase.from("recommendations").select("*").eq("client_id", id).order("created_at", { ascending: false });
+  recQuery = recId ? recQuery.eq("rec_id", recId) : recQuery.limit(10);
 
   const [{ data: cl }, { data: recs }] = await Promise.all([
     supabase.from("clients").select("full_name, client_code, pan").eq("client_id", id).maybeSingle(),
-    supabase.from("recommendations").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(10),
+    recQuery,
   ]);
   if (!cl) return NextResponse.json({ error: "Client not found" }, { status: 404 });
   if (!recs || recs.length === 0) return NextResponse.json({ error: "No recommendations to report" }, { status: 404 });
@@ -122,7 +126,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   page.drawText("Adviser: ____________________", { x: ML + 330, y: y - 58, font: reg, size: 8, color: rgb(0,0,0) });
 
   const bytes = await pdf.save();
-  const filename = `Recommendations_${cl.client_code ?? "Client"}_${today.replace(/\s/g, "-")}.pdf`;
+  const filename = recId && recs[0]?.doc_id
+    ? `${recs[0].doc_id}.pdf`
+    : `Recommendations_${cl.client_code ?? "Client"}_${today.replace(/\s/g, "-")}.pdf`;
 
   await supabase.from("client_activity_log").insert({
     client_id: id, event_type: "recommendation_report_generated",

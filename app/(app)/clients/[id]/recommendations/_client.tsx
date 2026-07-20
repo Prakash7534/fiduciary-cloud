@@ -112,7 +112,7 @@ export default function RecommendationsClient(p: Props) {
           {recs.length > 0 && (
             <a href={`/api/clients/${p.clientId}/recommendations/pdf`}
               className="px-3 py-1.5 text-xs border border-[#175A69] text-[#175A69] rounded-lg hover:bg-[#DDE6E8]">
-              ⬇ Download report (PDF)
+              ⬇ Full report (all recommendations)
             </a>
           )}
           <button onClick={() => setShowForm(v => !v)}
@@ -198,7 +198,13 @@ export default function RecommendationsClient(p: Props) {
               <p className="text-sm font-semibold text-[#0F3A46]">{r.scrip_name}</p>
               <p className="text-[10px] text-[#6B7E86]">{r.doc_id} · {new Date(r.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} · {r.asset_class}{r.category ? " · " + r.category : ""}</p>
             </div>
-            <span className={"text-xs px-2.5 py-1 rounded-full border font-semibold " + (STATUS_STYLE[r.status] ?? "")}>{STATUS_LABEL[r.status] ?? r.status}</span>
+            <div className="flex items-center gap-2">
+              <a href={`/api/clients/${p.clientId}/recommendations/pdf?rec=${r.rec_id}`}
+                className="text-xs px-2.5 py-1 border border-[#175A69] text-[#175A69] rounded-lg hover:bg-[#DDE6E8]">
+                ⬇ PDF
+              </a>
+              <span className={"text-xs px-2.5 py-1 rounded-full border font-semibold " + (STATUS_STYLE[r.status] ?? "")}>{STATUS_LABEL[r.status] ?? r.status}</span>
+            </div>
           </div>
           <div className="px-5 py-3 grid grid-cols-5 gap-3 text-xs border-b border-[#EEF4F5]">
             <div><p className="text-[#6B7E86]">Current price</p><p className="font-semibold text-[#0F3A46]">{fmt(r.current_price)}</p></div>
