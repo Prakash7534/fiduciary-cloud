@@ -6,7 +6,7 @@ import { assessRecommendation } from "@/lib/recommendationEngine";
 
 interface Rec {
   rec_id: string; scrip_name: string; asset_class: string | null; category: string | null;
-  current_price: number | null; consider_price: number | null; term: string | null;
+  current_price: number | null; consider_price: number | null; consider_price_max: number | null; term: string | null;
   rationale_market: string | null; rationale_suitability: string | null; key_risks: string | null;
   concentration_cap_pct: number | null; cap_headroom: number | null; suggested_amount: number | null;
   status: string; rejected_reason: string | null; executed_amount: number | null;
@@ -28,6 +28,7 @@ export default function RecommendationsClient(p: Props) {
   const [search, setSearch] = useState("");
   const [sel, setSel] = useState<UniverseRow | null>(null);
   const [considerPrice, setConsiderPrice] = useState<number | "">("");
+  const [considerPriceMax, setConsiderPriceMax] = useState<number | "">("");
   const [amount, setAmount] = useState<number | "">("");
   const [ratMarket, setRatMarket] = useState("");
   const [ratSuit, setRatSuit] = useState("");
@@ -49,6 +50,7 @@ export default function RecommendationsClient(p: Props) {
       existingInInstrument: p.byInstrument[u.instrument_id] ?? 0, capPct: p.capPct,
     });
     setConsiderPrice(u.current_price ?? "");
+    setConsiderPriceMax("");
     setAmount(a.suggestedAmount || "");
     setRatSuit(a.suitabilityNote);
     setRisks(a.keyRisks.map(r => "• " + r).join("\n"));
@@ -64,7 +66,8 @@ export default function RecommendationsClient(p: Props) {
       body: JSON.stringify({
         client_code: p.clientCode, instrument_id: sel.instrument_id, scrip_name: sel.name ?? sel.instrument_id,
         asset_class: sel.asset_class, category: sel.category,
-        current_price: sel.current_price, consider_price: considerPrice || null, term,
+        current_price: sel.current_price, consider_price: considerPrice || null,
+        consider_price_max: considerPriceMax || null, term,
         rationale_market: ratMarket, rationale_suitability: ratSuit, key_risks: risks,
         concentration_cap_pct: p.capPct,
         cap_headroom: Math.max(0, Math.round(p.totalPortfolio * p.capPct / 100 - (p.byInstrument[sel.instrument_id] ?? 0))),
@@ -146,12 +149,15 @@ export default function RecommendationsClient(p: Props) {
                 </div>
                 <button onClick={() => setSel(null)} className="text-xs text-[#175A69] hover:underline">change</button>
               </div>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-5 gap-3">
                 <div><label className="text-[10px] text-[#6B7E86]">Current price</label>
                   <p className="text-sm font-semibold text-[#0F3A46] mt-1">{fmt(sel.current_price)}</p></div>
-                <div><label className="text-[10px] text-[#6B7E86]">Consider price (₹)</label>
+                <div><label className="text-[10px] text-[#6B7E86]">Consider from (₹)</label>
                   <input type="number" value={considerPrice} onChange={e => setConsiderPrice(e.target.value ? Number(e.target.value) : "")}
                     className="w-full border border-[#CBD9DC] rounded px-2 py-1 text-sm mt-0.5" /></div>
+                <div><label className="text-[10px] text-[#6B7E86]">Consider to (₹)</label>
+                  <input type="number" value={considerPriceMax} onChange={e => setConsiderPriceMax(e.target.value ? Number(e.target.value) : "")}
+                    placeholder="optional" className="w-full border border-[#CBD9DC] rounded px-2 py-1 text-sm mt-0.5" /></div>
                 <div><label className="text-[10px] text-[#6B7E86]">Amount to consider (₹)</label>
                   <input type="number" value={amount} onChange={e => setAmount(e.target.value ? Number(e.target.value) : "")}
                     className="w-full border border-[#CBD9DC] rounded px-2 py-1 text-sm mt-0.5" /></div>
@@ -196,7 +202,7 @@ export default function RecommendationsClient(p: Props) {
           </div>
           <div className="px-5 py-3 grid grid-cols-5 gap-3 text-xs border-b border-[#EEF4F5]">
             <div><p className="text-[#6B7E86]">Current price</p><p className="font-semibold text-[#0F3A46]">{fmt(r.current_price)}</p></div>
-            <div><p className="text-[#6B7E86]">Consider price</p><p className="font-semibold text-[#0F3A46]">{fmt(r.consider_price)}</p></div>
+            <div><p className="text-[#6B7E86]">Consider price</p><p className="font-semibold text-[#0F3A46]">{fmt(r.consider_price)}{r.consider_price_max ? " – " + fmt(r.consider_price_max) : ""}</p></div>
             <div><p className="text-[#6B7E86]">Consider now</p><p className="font-semibold text-[#C39A38]">{fmt(r.suggested_amount)}</p></div>
             <div><p className="text-[#6B7E86]">Cap headroom</p><p className="font-semibold text-[#0F3A46]">{fmt(r.cap_headroom)} ({r.concentration_cap_pct}%)</p></div>
             <div><p className="text-[#6B7E86]">Term</p><p className="font-semibold text-[#0F3A46]">{r.term}</p></div>

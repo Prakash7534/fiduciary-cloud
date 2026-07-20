@@ -9,8 +9,18 @@ const DARK = rgb(0.059, 0.227, 0.275); const GOLD = rgb(0.765, 0.604, 0.22);
 const GREY = rgb(0.42, 0.49, 0.53); const LGREY = rgb(0.94, 0.96, 0.96);
 const W = 595.28, H = 841.89, ML = 45, TW = W - 90;
 
+// Replace characters outside WinAnsi (standard-font encoding) so pdf-lib never throws
+function safe(s: string): string {
+  return (s ?? "")
+    .replace(/₹/g, "Rs.").replace(/≤/g, "<=").replace(/≥/g, ">=")
+    .replace(/[✓✔]/g, "(y)").replace(/[✕✖⚠]/g, "!").replace(/→/g, "->")
+    .replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"')
+    .replace(/\u2022/g, "-").replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^\x20-\x7E\n]/g, "");
+}
+
 function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
-  const words = text.split(/\s+/); const lines: string[] = []; let cur = "";
+  const words = safe(text).split(/\s+/); const lines: string[] = []; let cur = "";
   words.forEach(w => {
     const t = cur ? cur + " " + w : w;
     if (font.widthOfTextAtSize(t, size) > width) { if (cur) lines.push(cur); cur = w; }
@@ -61,8 +71,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const ensure = (needed: number) => { if (y - needed < 40) newPage(); };
   const line = (label: string, value: string, boldVal = false) => {
     ensure(14);
-    page.drawText(label, { x: ML + 6, y, font: reg, size: 8, color: GREY });
-    page.drawText(value, { x: ML + 150, y, font: boldVal ? bold : reg, size: 8, color: rgb(0,0,0) });
+    page.drawText(safe(label), { x: ML + 6, y, font: reg, size: 8, color: GREY });
+    page.drawText(safe(value), { x: ML + 150, y, font: boldVal ? bold : reg, size: 8, color: rgb(0,0,0) });
     y -= 13;
   };
   const para = (label: string, text: string) => {
@@ -77,7 +87,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     ensure(120);
     // Card header
     page.drawRectangle({ x: ML, y: y - 4, width: TW, height: 20, color: DARK });
-    page.drawText(`${idx + 1}.  ${r.scrip_name}`, { x: ML + 6, y: y + 1, font: bold, size: 10, color: rgb(1,1,1) });
+    page.drawText(safe(`${idx + 1}.  ${r.scrip_name}`), { x: ML + 6, y: y + 1, font: bold, size: 10, color: rgb(1,1,1) });
     const st = (r.status ?? "recommended").toUpperCase();
     page.drawText(st, { x: W - ML - 90, y: y + 1, font: bold, size: 9,
       color: r.status === "executed" ? rgb(0.5,0.9,0.6) : r.status === "rejected" ? rgb(0.95,0.6,0.55) : GOLD });
@@ -85,7 +95,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     line("Instrument / Class", `${r.asset_class ?? "-"}${r.category ? " · " + r.category : ""}`);
     line("Current market price", fmt(r.current_price));
-    line("Consider (target) price", fmt(r.consider_price), true);
+    line("Consider (target) price", r.consider_price_max != null && r.consider_price_max !== r.consider_price
+      ? `${fmt(r.consider_price)} to ${fmt(r.consider_price_max)}` : fmt(r.consider_price), true);
     line("Investment term", r.term ?? "-", true);
     line("Concentration cap", `${r.concentration_cap_pct ?? "-"}% of portfolio  ·  headroom ${fmt(r.cap_headroom)}`);
     line("Amount to consider now", fmt(r.suggested_amount), true);

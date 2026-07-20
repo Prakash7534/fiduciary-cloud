@@ -37,7 +37,7 @@ export function assessRecommendation(inp: RecInput): RecAssessment {
   // ── Suitability: instrument risk must not exceed profile rank ──────────────
   const suitable = instRisk <= profRank;
   const suitabilityNote = suitable
-    ? `${u.risk_level ?? "Medium"}-risk ${ac} instrument is within the client's ${clientProfile} profile (risk rank ${instRisk} ≤ profile rank ${profRank}). ${ac} carries a ${saa[ac] ?? 0}% target weight in the client's strategic allocation.`
+    ? `${u.risk_level ?? "Medium"}-risk ${ac} instrument is within the client's ${clientProfile} profile (risk rank ${instRisk} <= profile rank ${profRank}). ${ac} carries a ${saa[ac] ?? 0}% target weight in the client's strategic allocation.`
     : `CAUTION: ${u.risk_level ?? "Medium"}-risk instrument EXCEEDS the client's ${clientProfile} profile (risk rank ${instRisk} > ${profRank}). Recommending requires documented justification and explicit client consent.`;
 
   // ── Term: from asset class / category ──────────────────────────────────────
@@ -48,7 +48,7 @@ export function assessRecommendation(inp: RecInput): RecAssessment {
     ? "Short term — suited for parking, emergency funds or goals within 3 years."
     : ac === "Equity" || ac === "International"
       ? "Long term — equity accumulation is recommended only for horizons above 5 years; short-term volatility must be tolerated."
-      : "Long term — hold through at least one full market cycle (3–5 years+).";
+      : "Long term — hold through at least one full market cycle (3-5 years+).";
 
   // ── Concentration cap headroom ─────────────────────────────────────────────
   const capValue = totalPortfolio * capPct / 100;
@@ -70,9 +70,9 @@ export function assessRecommendation(inp: RecInput): RecAssessment {
   if (ac === "Debt")
     keyRisks.push("Interest-rate and credit risk: bond prices fall when rates rise; check credit quality of underlying papers.");
   if (ac === "Gold")
-    keyRisks.push("Gold pays no income and can stagnate for long periods; treat as a 5–10% diversifier, not a core holding.");
+    keyRisks.push("Gold pays no income and can stagnate for long periods; treat as a 5-10 percent diversifier, not a core holding.");
   if (instRisk >= 4)
-    keyRisks.push(`This is a ${u.risk_level}-risk instrument — drawdowns of 30%+ are possible in stress periods.`);
+    keyRisks.push(`This is a ${u.risk_level}-risk instrument — drawdowns of 30 percent or more are possible in stress periods.`);
   if (!suitable)
     keyRisks.push("Risk level exceeds your assessed profile — you may be taking more risk than your capacity supports.");
   if (existingInInstrument > 0)
