@@ -78,6 +78,22 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
   const curByClass = currentValueByClass(posRows, holdRows);
   const gapPlan = buildGapPlan(saa, curByClass, 0, 0);
 
+  // Overlap between declared investments and itemised holdings (same class) — avoid double count
+  const declaredByClass: Record<string, number> = {};
+  (investments ?? []).forEach((i: Record<string, unknown>) => {
+    const acRaw = String(i.asset_class ?? "");
+    const ac = /equity|stock/i.test(acRaw) ? "Equity" : /debt|bond|fd|savings|epf|ppf|nps|insurance|ulip/i.test(acRaw) ? "Debt"
+      : /gold/i.test(acRaw) ? "Gold" : "Alternate";
+    declaredByClass[ac] = (declaredByClass[ac] ?? 0) + Number(i.value ?? 0);
+  });
+  const holdOnlyByClass: Record<string, number> = {};
+  holdRows.forEach(h => {
+    const v = (h.current_value ?? 0) > 0 ? (h.current_value ?? 0) : h.lumpsum_invested;
+    holdOnlyByClass[h.asset_class] = (holdOnlyByClass[h.asset_class] ?? 0) + v;
+  });
+  const assetOverlap = Object.keys(declaredByClass).reduce(
+    (s, ac) => s + Math.min(declaredByClass[ac] ?? 0, holdOnlyByClass[ac] ?? 0), 0);
+
   // ── Goals with live-portfolio dynamics (same logic as Goal Calculator) ────
   const goals = (goalsRaw ?? []) as GoalRow[];
   const execPos = (positions ?? []).filter(p => p.status === "executed");
@@ -194,6 +210,7 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
       gapValue: Math.round(g.gapValue),
     })),
     totalCurrent: Math.round(gapPlan.totalCurrent),
+    assetOverlap: Math.round(assetOverlap),
     goalRows, totalExtraSip, totalLumpsumNow,
     positions: proposedPositions,
     notes: {

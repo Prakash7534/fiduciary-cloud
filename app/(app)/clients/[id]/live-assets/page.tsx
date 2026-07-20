@@ -31,14 +31,34 @@ export default async function LiveAssetsPage({ params }: { params: Promise<{ id:
 
   const rows: Row[] = [];
 
-  // 1. Declared assets from questionnaire
+  // Holdings value per asset class — used to offset declared amounts of the same
+  // class, since manually itemised holdings usually re-describe declared money.
+  const holdingsByClass: Record<string, number> = {};
+  (holdings ?? []).forEach(h => {
+    const v = Number(h.current_value ?? 0) > 0 ? Number(h.current_value) : Number(h.lumpsum_invested ?? 0);
+    const ac = String(h.asset_class ?? "Equity");
+    holdingsByClass[ac] = (holdingsByClass[ac] ?? 0) + v;
+  });
+  const offsetUsed: Record<string, number> = {};
+  let totalOffset = 0;
+
+  // 1. Declared assets from questionnaire — netted against holdings of same class
   (inv ?? []).forEach(i => {
     const v = Number(i.value ?? 0), s = Number(i.monthly_sip ?? 0);
     if (v === 0 && s === 0) return;
     const acRaw = String(i.asset_class ?? "");
     const ac = /equity|stock/i.test(acRaw) ? "Equity" : /debt|bond|fd|savings|epf|ppf|nps/i.test(acRaw) ? "Debt"
       : /gold/i.test(acRaw) ? "Gold" : /real estate/i.test(acRaw) ? "Alternate" : /insurance|ulip/i.test(acRaw) ? "Debt" : "Alternate";
-    rows.push({ name: acRaw, asset_class: ac, value: v, sip: s, source: "Declared (questionnaire)", date: null });
+    const remaining = Math.max(0, (holdingsByClass[ac] ?? 0) - (offsetUsed[ac] ?? 0));
+    const offset = Math.min(v, remaining);
+    offsetUsed[ac] = (offsetUsed[ac] ?? 0) + offset;
+    totalOffset += offset;
+    const net = v - offset;
+    if (net === 0 && s === 0) return; // fully itemised as holdings — skip to avoid duplication
+    rows.push({
+      name: acRaw + (offset > 0 ? ` (net of ₹${offset.toLocaleString("en-IN")} itemised as holdings)` : ""),
+      asset_class: ac, value: net, sip: s, source: "Declared (questionnaire)", date: null,
+    });
   });
 
   // 2. Executed positions — split construction vs recommendation by notes
@@ -97,7 +117,7 @@ export default async function LiveAssetsPage({ params }: { params: Promise<{ id:
       <div className="grid grid-cols-4 gap-3">
         {[
           ["Total live assets", fmt(totalValue), "all sources combined"],
-          ["Declared (questionnaire)", fmt(declared), "as reported by client"],
+          ["Declared (questionnaire)", fmt(declared), totalOffset > 0 ? `net of ${fmt(totalOffset)} itemised as holdings` : "as reported by client"],
           ["Executed via platform", fmt(executed), "construction + recommendations + holdings"],
           ["Total monthly SIP", totalSip > 0 ? fmt(totalSip) + "/mo" : "—", "recurring across all assets"],
         ].map(([l, v, s]) => (
@@ -169,7 +189,7 @@ export default async function LiveAssetsPage({ params }: { params: Promise<{ id:
       ))}
 
       <p className="text-[10px] text-[#6B7E86]">
-        Declared assets come from the last submitted questionnaire. Executed entries flow in automatically from Portfolio Construction and executed Recommendations. Values use current value where recorded, else the executed/declared amount.
+        Declared assets come from the last submitted questionnaire, NET of any amount itemised as existing holdings in the same asset class — this prevents the same money being counted twice{totalOffset > 0 ? ` (₹${totalOffset.toLocaleString("en-IN")} de-duplicated on this view)` : ""}. Executed entries flow in automatically from Portfolio Construction and executed Recommendations. Values use current value where recorded, else the executed/declared amount.
       </p>
     </div>
   );
