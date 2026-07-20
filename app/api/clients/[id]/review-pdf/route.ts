@@ -77,6 +77,19 @@ function footer(page: PDFPage, reg: PDFFont, pageNum: number, total: number, doc
 }
 
 // Row with label and field
+// Embed a near-invisible field carrying row IDs for each pre-filled slot, so
+// a later upload can reconcile precisely instead of blindly wiping the section.
+function embedSyncIds(
+  pdfDoc: PDFDocument, form: PDFForm, page: PDFPage,
+  ids: { goals: (string | null)[]; loans: (string | null)[]; fam: (string | null)[] }
+) {
+  try {
+    const field = form.createTextField("_sync_ids");
+    field.addToPage(page, { x: 2, y: 2, width: 0.5, height: 0.5, borderWidth: 0 });
+    field.setText(JSON.stringify(ids));
+  } catch { /* non-fatal — extraction falls back to legacy behaviour */ }
+}
+
 function labelField(
   form: PDFForm, page: PDFPage,
   label: string, fieldName: string,
@@ -269,11 +282,17 @@ export async function GET(
   goalRows.forEach((g, i) => {
     addField(form, p2, `rv_goal${i+1}_name`,  gCols[0], y-2, 90, 13, (g.goal_name as string|undefined) ?? "", false, reg);
     addField(form, p2, `rv_goal${i+1}_year`,  gCols[1], y-2, 75, 13, g.target_year ? String(g.target_year) : "", false, reg);
-    addField(form, p2, `rv_goal${i+1}_cost`,  gCols[2], y-2, 75, 13, fmt(g.target_amount as number|undefined), false, reg);
-    addField(form, p2, `rv_goal${i+1}_saved`, gCols[3], y-2, 60, 13, fmt(g.current_savings as number|undefined), false, reg);
+    addField(form, p2, `rv_goal${i+1}_cost`,  gCols[2], y-2, 75, 13, fmt(g.cost_today as number|undefined), false, reg);
+    addField(form, p2, `rv_goal${i+1}_saved`, gCols[3], y-2, 60, 13, fmt(g.saved as number|undefined), false, reg);
     addField(form, p2, `rv_goal${i+1}_sip`,   gCols[4], y-2, 60, 13, fmt(g.monthly_sip as number|undefined), false, reg);
     addField(form, p2, `rv_goal${i+1}_track`, gCols[5], y-2, 60, 13, "", false, reg);
     y -= 18;
+  });
+
+  embedSyncIds(pdfDoc, form, p2, {
+    goals: goalRows.map((g: Record<string, unknown>) => (g.goal_id as string) ?? null),
+    loans: loanRows.map((l: Record<string, unknown>) => (l.loan_id as string) ?? null),
+    fam: [],
   });
 
   footer(p2, reg, 2, PAGES, docId);

@@ -133,6 +133,18 @@ export async function POST(
   };
   const loaded: string[] = [];
 
+  // Reconciliation IDs embedded by the PDF generator (goal_id/loan_id/fam_id
+  // per pre-filled slot). When present, extraction can update/insert/delete
+  // precisely instead of blindly wiping every existing row for a section —
+  // this protects rows the PDF never represented (added after generation, or
+  // beyond the fixed slot count). Older PDFs generated before this field
+  // existed simply won't have it, and fall back to the previous behaviour.
+  let syncIds: { goals: (string | null)[]; loans: (string | null)[]; fam: (string | null)[] } | null = null;
+  try {
+    const raw = rawField("_sync_ids");
+    if (raw) syncIds = JSON.parse(raw);
+  } catch { syncIds = null; }
+
   try {
     // ── 1. Risk answers Q1–19 ────────────────────────────────────────────────
     const riskRows: { client_id: string; question_num: number; answer: string }[] = [];
@@ -232,60 +244,120 @@ export async function POST(
     }
 
     // ── 4. Goals ─────────────────────────────────────────────────────────────
-    const goalRows: Record<string, unknown>[] = [];
-    for (let g = 1; g <= 6; g++) {
-      const name = getField(`goal${g}_name`).trim();
-      if (!name) continue;
-      goalRows.push({
-        client_id: id, goal_name: name,
-        target_year: num(getField(`goal${g}_year`)) != null ? Math.round(num(getField(`goal${g}_year`))!) : null,
-        cost_today: num(getField(`goal${g}_cost`)),
-        saved: num(getField(`goal${g}_saved`)),
-        monthly_sip: num(getField(`goal${g}_sip`)),
-      });
-    }
-    if (goalRows.length > 0) {
-      await supabase.from("goals").delete().eq("client_id", id);
-      await supabase.from("goals").insert(goalRows);
-      loaded.push(`${goalRows.length} goals`);
+    if (syncIds) {
+      // Precise reconciliation: update/insert per slot by embedded goal_id;
+      // delete only a slot whose name was cleared AND had a known id.
+      let touched = 0;
+      for (let g = 1; g <= 6; g++) {
+        const name = getField(`goal${g}_name`).trim();
+        const slotId = syncIds.goals?.[g - 1] ?? null;
+        const fields = {
+          goal_name: name || null,
+          target_year: num(getField(`goal${g}_year`)) != null ? Math.round(num(getField(`goal${g}_year`))!) : null,
+          cost_today: num(getField(`goal${g}_cost`)),
+          saved: num(getField(`goal${g}_saved`)),
+          monthly_sip: num(getField(`goal${g}_sip`)),
+        };
+        if (name && slotId) { await supabase.from("goals").update(fields).eq("goal_id", slotId); touched++; }
+        else if (name && !slotId) { await supabase.from("goals").insert({ client_id: id, ...fields }); touched++; }
+        else if (!name && slotId) { await supabase.from("goals").delete().eq("goal_id", slotId); touched++; }
+      }
+      if (touched > 0) loaded.push(`${touched} goal(s) reconciled`);
+    } else {
+      // Legacy fallback (PDF predates sync-id embedding)
+      const goalRows: Record<string, unknown>[] = [];
+      for (let g = 1; g <= 6; g++) {
+        const name = getField(`goal${g}_name`).trim();
+        if (!name) continue;
+        goalRows.push({
+          client_id: id, goal_name: name,
+          target_year: num(getField(`goal${g}_year`)) != null ? Math.round(num(getField(`goal${g}_year`))!) : null,
+          cost_today: num(getField(`goal${g}_cost`)),
+          saved: num(getField(`goal${g}_saved`)),
+          monthly_sip: num(getField(`goal${g}_sip`)),
+        });
+      }
+      if (goalRows.length > 0) {
+        await supabase.from("goals").delete().eq("client_id", id);
+        await supabase.from("goals").insert(goalRows);
+        loaded.push(`${goalRows.length} goals`);
+      }
     }
 
     // ── 5. Loans ─────────────────────────────────────────────────────────────
     const LOAN_TYPES = ["Home Loan","Vehicle Loan","Personal Loan","Education Loan","Gold Loan","Credit Card","Loan Against Property/Securities","Business Loan","Other"];
-    const loanRows: Record<string, unknown>[] = [];
-    for (let l = 1; l <= 9; l++) {
-      const out = num(getField(`loan${l}_out`)); const lender = getField(`loan${l}_lender`).trim();
-      if (out == null && !lender) continue;
-      loanRows.push({
-        client_id: id, loan_type: LOAN_TYPES[l-1], lender: lender || null,
-        outstanding: out, emi: num(getField(`loan${l}_emi`)),
-        rate: num(getField(`loan${l}_rate`)),
-        tenure_months: num(getField(`loan${l}_tenure`)) != null ? Math.round(num(getField(`loan${l}_tenure`))!) : null,
-      });
-    }
-    if (loanRows.length > 0) {
-      await supabase.from("loans").delete().eq("client_id", id);
-      await supabase.from("loans").insert(loanRows);
-      loaded.push(`${loanRows.length} loans`);
+    if (syncIds) {
+      let touched = 0;
+      for (let l = 1; l <= 9; l++) {
+        const out = num(getField(`loan${l}_out`)); const lender = getField(`loan${l}_lender`).trim();
+        const hasData = out != null || !!lender;
+        const slotId = syncIds.loans?.[l - 1] ?? null;
+        const fields = {
+          loan_type: LOAN_TYPES[l-1], lender: lender || null,
+          outstanding: out, emi: num(getField(`loan${l}_emi`)),
+          rate: num(getField(`loan${l}_rate`)),
+          tenure_months: num(getField(`loan${l}_tenure`)) != null ? Math.round(num(getField(`loan${l}_tenure`))!) : null,
+        };
+        if (hasData && slotId) { await supabase.from("loans").update(fields).eq("loan_id", slotId); touched++; }
+        else if (hasData && !slotId) { await supabase.from("loans").insert({ client_id: id, ...fields }); touched++; }
+        else if (!hasData && slotId) { await supabase.from("loans").delete().eq("loan_id", slotId); touched++; }
+      }
+      if (touched > 0) loaded.push(`${touched} loan(s) reconciled`);
+    } else {
+      const loanRows: Record<string, unknown>[] = [];
+      for (let l = 1; l <= 9; l++) {
+        const out = num(getField(`loan${l}_out`)); const lender = getField(`loan${l}_lender`).trim();
+        if (out == null && !lender) continue;
+        loanRows.push({
+          client_id: id, loan_type: LOAN_TYPES[l-1], lender: lender || null,
+          outstanding: out, emi: num(getField(`loan${l}_emi`)),
+          rate: num(getField(`loan${l}_rate`)),
+          tenure_months: num(getField(`loan${l}_tenure`)) != null ? Math.round(num(getField(`loan${l}_tenure`))!) : null,
+        });
+      }
+      if (loanRows.length > 0) {
+        await supabase.from("loans").delete().eq("client_id", id);
+        await supabase.from("loans").insert(loanRows);
+        loaded.push(`${loanRows.length} loans`);
+      }
     }
 
     // ── 6. Family members ────────────────────────────────────────────────────
-    const famRows: Record<string, unknown>[] = [];
-    for (let f = 1; f <= 4; f++) {
-      const name = getField(`fam${f}_name`).trim();
-      if (!name) continue;
-      famRows.push({
-        client_id: id, name, relationship: getField(`fam${f}_rel`).trim() || null,
-        age: num(getField(`fam${f}_age`)) != null ? Math.round(num(getField(`fam${f}_age`))!) : null,
-        occupation: getField(`fam${f}_occ`).trim() || null,
-        annual_income: num(getField(`fam${f}_income`)),
-        health_status: getField(`fam${f}_health`).trim() || null,
-      });
-    }
-    if (famRows.length > 0) {
-      await supabase.from("family_members").delete().eq("client_id", id);
-      await supabase.from("family_members").insert(famRows);
-      loaded.push(`${famRows.length} family members`);
+    if (syncIds) {
+      let touched = 0;
+      for (let f = 1; f <= 4; f++) {
+        const name = getField(`fam${f}_name`).trim();
+        const slotId = syncIds.fam?.[f - 1] ?? null;
+        const fields = {
+          name: name || null, relationship: getField(`fam${f}_rel`).trim() || null,
+          age: num(getField(`fam${f}_age`)) != null ? Math.round(num(getField(`fam${f}_age`))!) : null,
+          occupation: getField(`fam${f}_occ`).trim() || null,
+          annual_income: num(getField(`fam${f}_income`)),
+          health_status: getField(`fam${f}_health`).trim() || null,
+        };
+        if (name && slotId) { await supabase.from("family_members").update(fields).eq("fam_id", slotId); touched++; }
+        else if (name && !slotId) { await supabase.from("family_members").insert({ client_id: id, ...fields }); touched++; }
+        else if (!name && slotId) { await supabase.from("family_members").delete().eq("fam_id", slotId); touched++; }
+      }
+      if (touched > 0) loaded.push(`${touched} family member(s) reconciled`);
+    } else {
+      const famRows: Record<string, unknown>[] = [];
+      for (let f = 1; f <= 4; f++) {
+        const name = getField(`fam${f}_name`).trim();
+        if (!name) continue;
+        famRows.push({
+          client_id: id, name, relationship: getField(`fam${f}_rel`).trim() || null,
+          age: num(getField(`fam${f}_age`)) != null ? Math.round(num(getField(`fam${f}_age`))!) : null,
+          occupation: getField(`fam${f}_occ`).trim() || null,
+          annual_income: num(getField(`fam${f}_income`)),
+          health_status: getField(`fam${f}_health`).trim() || null,
+        });
+      }
+      if (famRows.length > 0) {
+        await supabase.from("family_members").delete().eq("client_id", id);
+        await supabase.from("family_members").insert(famRows);
+        loaded.push(`${famRows.length} family members`);
+      }
     }
 
     // ── 7. Existing investments ──────────────────────────────────────────────

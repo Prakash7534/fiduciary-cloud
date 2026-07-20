@@ -36,6 +36,22 @@ function fmt(n: number | null | undefined) {
   return n.toLocaleString("en-IN");
 }
 
+// Embed a near-invisible field carrying row IDs for each pre-filled slot, so
+// a later upload can reconcile (update/insert/delete) precisely instead of
+// blindly wiping every existing row for the section.
+function embedSyncIds(
+  pdfDoc: PDFDocument,
+  form: ReturnType<PDFDocument["getForm"]>,
+  ids: { goals: (string | null)[]; loans: (string | null)[]; fam: (string | null)[] }
+) {
+  try {
+    const page = pdfDoc.getPage(0);
+    const field = form.createTextField("_sync_ids");
+    field.addToPage(page, { x: 2, y: 2, width: 0.5, height: 0.5, borderWidth: 0 });
+    field.setText(JSON.stringify(ids));
+  } catch { /* non-fatal — extraction falls back to legacy behaviour */ }
+}
+
 // ── route ─────────────────────────────────────────────────────────────────────
 export async function GET(
   _req: NextRequest,
@@ -206,8 +222,8 @@ export async function GET(
       const n = i + 1;
       txt(form, `goal${n}_name`,  g.goal_name as string);
       txt(form, `goal${n}_year`,  g.target_year as string);
-      txt(form, `goal${n}_cost`,  fmt(g.target_amount as number));
-      txt(form, `goal${n}_saved`, fmt(g.current_savings as number));
+      txt(form, `goal${n}_cost`,  fmt(g.cost_today as number));
+      txt(form, `goal${n}_saved`, fmt(g.saved as number));
       txt(form, `goal${n}_sip`,   fmt(g.monthly_sip as number));
     });
 
@@ -290,6 +306,12 @@ export async function GET(
 
   // ── flatten so fields stay filled (no change needed after download) ────────
   // We intentionally keep fields editable for manual additions
+
+  embedSyncIds(pdfDoc, form, {
+    goals: (goals ?? []).slice(0, 6).map((g: Record<string, unknown>) => (g.goal_id as string) ?? null),
+    loans: (loans ?? []).slice(0, 9).map((l: Record<string, unknown>) => (l.loan_id as string) ?? null),
+    fam:   (family ?? []).slice(0, 4).map((f: Record<string, unknown>) => (f.fam_id as string) ?? null),
+  });
 
   // ── serialize and return ──────────────────────────────────────────────────
   const pdfBytes = await pdfDoc.save();
