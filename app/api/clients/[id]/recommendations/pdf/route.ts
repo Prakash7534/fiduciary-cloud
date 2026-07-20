@@ -40,9 +40,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   let recQuery = supabase.from("recommendations").select("*").eq("client_id", id).order("created_at", { ascending: false });
   recQuery = recId ? recQuery.eq("rec_id", recId) : recQuery.limit(10);
 
-  const [{ data: cl }, { data: recs }] = await Promise.all([
+  const [{ data: cl }, { data: recs }, { data: firm }] = await Promise.all([
     supabase.from("clients").select("full_name, client_code, pan").eq("client_id", id).maybeSingle(),
     recQuery,
+    supabase.from("firm_settings").select("*").eq("user_id", user.id).maybeSingle(),
   ]);
   if (!cl) return NextResponse.json({ error: "Client not found" }, { status: 404 });
   if (!recs || recs.length === 0) return NextResponse.json({ error: "No recommendations to report" }, { status: 404 });
@@ -129,10 +130,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     "adviser of any material change in your circumstances before acting on this recommendation.",
   ];
   info.forEach((l, i) => page.drawText(l, { x: ML + 8, y: y - 26 - i * 9, font: reg, size: 7, color: rgb(0,0,0) }));
-  y -= 88;
-  ensure(14);
-  page.drawText(safe(`Issued by: ${user.email ?? "Adviser"}  ·  ${today}  ·  Queries: please contact your adviser before acting.`),
-    { x: ML + 2, y, font: reg, size: 7.5, color: GREY });
+  y -= 92;
+
+  // ── Adviser signature & credentials ────────────────────────────────────────
+  ensure(84);
+  page.drawRectangle({ x: ML, y: y - 72, width: TW, height: 72, color: rgb(1,1,1) });
+  page.drawRectangle({ x: ML, y: y - 72, width: TW, height: 72, borderColor: rgb(0.78,0.85,0.86), borderWidth: 0.8 });
+  page.drawText("ISSUED BY — INVESTMENT ADVISER", { x: ML + 8, y: y - 13, font: bold, size: 8, color: DARK });
+
+  const advName = firm?.advisor_name ?? "";
+  const firmName = firm?.firm_name ?? "";
+  const regn = firm?.sebi_regn ?? "";
+  page.drawText(safe(`Name: ${advName || "____________________"}`), { x: ML + 8, y: y - 27, font: reg, size: 8, color: rgb(0,0,0) });
+  page.drawText(safe(`Firm: ${firmName || "____________________"}`), { x: ML + 8, y: y - 39, font: reg, size: 8, color: rgb(0,0,0) });
+  page.drawText(safe(`SEBI Regn. No.: ${regn || "INA____________"}`), { x: ML + 8, y: y - 51, font: reg, size: 8, color: rgb(0,0,0) });
+  page.drawText(safe(`Contact: ${firm?.phone ?? "-"}  ·  ${firm?.email ?? user.email ?? "-"}`), { x: ML + 8, y: y - 63, font: reg, size: 7.5, color: GREY });
+
+  // Signature area on the right
+  page.drawLine({ start: { x: ML + TW - 190, y: y - 48 }, end: { x: ML + TW - 15, y: y - 48 }, thickness: 0.7, color: rgb(0.4,0.47,0.5) });
+  page.drawText("Signature / Digital sign", { x: ML + TW - 185, y: y - 58, font: reg, size: 7, color: GREY });
+  page.drawText(safe(`Date of issue: ${today}`), { x: ML + TW - 185, y: y - 68, font: reg, size: 7, color: GREY });
 
   const bytes = await pdf.save();
   const filename = recId && recs[0]?.doc_id
