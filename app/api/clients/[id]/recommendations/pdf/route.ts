@@ -116,14 +116,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     y -= 8;
   });
 
-  // Declaration
-  ensure(90);
-  page.drawRectangle({ x: ML, y: y - 64, width: TW, height: 64, color: LGREY });
-  page.drawText("CLIENT ACKNOWLEDGEMENT", { x: ML + 8, y: y - 14, font: bold, size: 8, color: DARK });
-  wrap("I acknowledge receipt of the above recommendation(s), including the rationale, suitability assessment, concentration limits and key risks. I understand I am free to accept, reject or partially execute any recommendation, and that market prices may differ at the time of execution.", reg, 7.5, TW - 20)
-    .forEach((l, i) => page.drawText(l, { x: ML + 8, y: y - 26 - i * 10, font: reg, size: 7.5, color: rgb(0,0,0) }));
-  page.drawText("Client signature: ____________________    Date: ____________", { x: ML + 8, y: y - 58, font: reg, size: 8, color: rgb(0,0,0) });
-  page.drawText("Adviser: ____________________", { x: ML + 330, y: y - 58, font: reg, size: 8, color: rgb(0,0,0) });
+  // Important information — advisory nature (no client signature required)
+  ensure(96);
+  page.drawRectangle({ x: ML, y: y - 78, width: TW, height: 78, color: LGREY });
+  page.drawText("IMPORTANT — PLEASE READ", { x: ML + 8, y: y - 14, font: bold, size: 8, color: DARK });
+  const info = [
+    "This document is an investment recommendation for your consideration only. It creates no obligation - you are entirely",
+    "free to accept it, reject it, execute it partially, or seek clarification before deciding. No action will be taken on",
+    "your behalf without your explicit instruction.",
+    "Prices shown are as at the date of issue and will move with the market; the 'consider price' is indicative, not assured.",
+    "The suitability assessment is based on your recorded risk profile and portfolio as at the issue date. Please inform your",
+    "adviser of any material change in your circumstances before acting on this recommendation.",
+  ];
+  info.forEach((l, i) => page.drawText(l, { x: ML + 8, y: y - 26 - i * 9, font: reg, size: 7, color: rgb(0,0,0) }));
+  y -= 88;
+  ensure(14);
+  page.drawText(safe(`Issued by: ${user.email ?? "Adviser"}  ·  ${today}  ·  Queries: please contact your adviser before acting.`),
+    { x: ML + 2, y, font: reg, size: 7.5, color: GREY });
 
   const bytes = await pdf.save();
   const filename = recId && recs[0]?.doc_id
