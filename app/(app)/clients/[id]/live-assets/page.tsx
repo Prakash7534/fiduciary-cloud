@@ -21,11 +21,12 @@ export default async function LiveAssetsPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: client, error }, { data: inv }, { data: positions }, { data: holdings }] = await Promise.all([
+  const [{ data: client, error }, { data: inv }, { data: positions }, { data: holdings }, { data: facts }] = await Promise.all([
     supabase.from("clients").select("full_name, client_code").eq("client_id", id).single(),
     supabase.from("investments").select("*").eq("client_id", id),
     supabase.from("portfolio_positions").select("*").eq("client_id", id).eq("status", "executed"),
     supabase.from("portfolio_holdings").select("*").eq("client_id", id),
+    supabase.from("financial_facts").select("house_value, prop_value, epf_nps_corpus").eq("client_id", id).maybeSingle(),
   ]);
   if (error || !client) notFound();
 
@@ -76,6 +77,15 @@ export default async function LiveAssetsPage({ params }: { params: Promise<{ id:
       asset_class: ac, value: net, sip: s, source: "Declared (questionnaire)", date: null,
     });
   });
+
+  // 1b. Property & EPF/NPS from financial facts — same components the Assets
+  // page counts, so the two views reconcile. Not subject to holdings netting.
+  const propertyVal = Number(facts?.house_value ?? 0) + Number(facts?.prop_value ?? 0);
+  if (propertyVal > 0)
+    rows.push({ name: "Property (self-occupied + other)", asset_class: "Alternate", value: propertyVal, sip: 0, source: "Declared (questionnaire)", date: null });
+  const epfNps = Number(facts?.epf_nps_corpus ?? 0);
+  if (epfNps > 0)
+    rows.push({ name: "EPF / NPS corpus", asset_class: "Debt", value: epfNps, sip: 0, source: "Declared (questionnaire)", date: null });
 
   // 2. Executed positions — split construction vs recommendation by notes
   (positions ?? []).forEach(p => {
@@ -205,7 +215,7 @@ export default async function LiveAssetsPage({ params }: { params: Promise<{ id:
       ))}
 
       <p className="text-[10px] text-[#6B7E86]">
-        Declared assets come from the last submitted questionnaire, NET of platform-tracked assets that existed before that declaration (itemised holdings + positions executed earlier) in the same asset class — the client&apos;s review declaration already includes them. Investments executed AFTER the declaration count as new money — this prevents the same money being counted twice{totalOffset > 0 ? ` (₹${totalOffset.toLocaleString("en-IN")} de-duplicated on this view)` : ""}. Executed entries flow in automatically from Portfolio Construction and executed Recommendations. Values use current value where recorded, else the executed/declared amount.
+        Declared assets come from the last submitted questionnaire, NET of platform-tracked assets that existed before that declaration (itemised holdings + positions executed earlier) in the same asset class — the client&apos;s review declaration already includes them. Investments executed AFTER the declaration count as new money. Declared here also includes property and EPF/NPS corpus so the total reconciles with the Assets page (any remaining difference equals the de-duplication offset shown above) — this prevents the same money being counted twice{totalOffset > 0 ? ` (₹${totalOffset.toLocaleString("en-IN")} de-duplicated on this view)` : ""}. Executed entries flow in automatically from Portfolio Construction and executed Recommendations. Values use current value where recorded, else the executed/declared amount.
       </p>
     </div>
   );
