@@ -60,17 +60,23 @@ export async function POST(
   }
 
   const pdfForm = pdfDoc.getForm();
-  const getField = (name: string): string => {
+  const rawField = (name: string): string => {
     try { return pdfForm.getTextField(name).getText() ?? ""; } catch { return ""; }
+  };
+  // Try the original questionnaire field name first, then the review-PDF (rv_) variant
+  const getField = (name: string): string => {
+    const v = rawField(name);
+    if (v) return v;
+    return rawField(`rv_${name}`);
   };
 
   const pdf = {
-    client_code: getField("f_2"),
-    full_name:   getField("client_name"),
-    pan:         getField("pan"),
-    dob:         getField("dob"),
-    phone:       getField("phone"),
-    email:       getField("email"),
+    client_code: rawField("f_2")        || rawField("ucc"),
+    full_name:   rawField("client_name") || rawField("rv_full_name"),
+    pan:         rawField("pan")         || rawField("rv_pan"),
+    dob:         rawField("dob")         || rawField("rv_dob"),
+    phone:       rawField("phone")       || rawField("rv_phone"),
+    email:       rawField("email")       || rawField("rv_email"),
   };
 
   const { data: cl } = await supabase
@@ -111,9 +117,10 @@ export async function POST(
   // ══════════════════════════════════════════════════════════════════════════
   // EXTRACT & LOAD all questionnaire answers from the PDF into the database
   // ══════════════════════════════════════════════════════════════════════════
-  const isChecked = (name: string): boolean => {
+  const rawChecked = (name: string): boolean => {
     try { return pdfForm.getCheckBox(name).isChecked(); } catch { return false; }
   };
+  const isChecked = (name: string): boolean => rawChecked(name) || rawChecked(`rv_${name}`);
   const num = (s: string): number | null => {
     const v = parseFloat(s.replace(/[,₹\s]/g, ""));
     return isNaN(v) ? null : v;
@@ -169,7 +176,8 @@ export async function POST(
     const ftext = (field: string, col: string) => { const v = getField(field).trim(); if (v) ff[col] = v; };
     fnum("inc_self","income_self"); fnum("inc_spouse","income_spouse"); fnum("inc_other","income_other");
     fnum("expenses_annual","expenses_annual"); fnum("life_cover","life_cover"); fnum("health_cover","health_cover");
-    fnum("employer_cover","employer_cover"); fnum("rent_monthly","rent_monthly"); fnum("house_value","house_value");
+    fnum("employer_cover","employer_cover");
+    if (ff.employer_cover == null) { const ec = num(rawField("rv_emp_cover") || ""); if (ec != null) ff.employer_cover = ec; } fnum("rent_monthly","rent_monthly"); fnum("house_value","house_value");
     fnum("prop_value","prop_value"); fnum("rental_income","rental_income"); fnum("sec80c","sec80c"); fnum("sec80d","sec80d");
     fnum("epf_nps_corpus","epf_nps_corpus"); fnum("ret_exp","ret_expenses"); fnum("ret_pension","ret_pension");
     const ra = num(getField("retage_from_b6")) ?? num(getField("retage_self")); if (ra != null) ff.retirement_age = Math.round(ra);
