@@ -35,6 +35,7 @@ export default function ClientSidebar({ clientId, clientName }: { clientId: stri
       items: [
         { label: "Cash Flow", href: `${base}/cash-flow`, available: true },
         { label: "Assets",    href: `${base}/assets`,    available: true },
+        { label: "Live Assets", href: `${base}/live-assets`, available: true },
         { label: "Debts",     href: `${base}/debts`,     available: true },
         { label: "Insurance", href: `${base}/insurance`, available: true },
       ],

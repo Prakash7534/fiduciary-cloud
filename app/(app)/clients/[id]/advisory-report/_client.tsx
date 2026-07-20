@@ -525,8 +525,9 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
           </div>
           <div className="mt-2 bg-[#F5F9FA] rounded-lg px-3 py-2">
             <p className="text-[10px] text-[#6B7E86]">
-              Live portfolio tracked on platform: <strong className="text-[#0F3A46]">{fmt(d.totalCurrent)}</strong> current value
+              <strong className="text-[#0F3A46]">Live assets:</strong> declared {fmt(d.fp.totalAssets)} + executed via platform {fmt(d.totalCurrent)} = <strong className="text-[#0F3A46]">{fmt(d.fp.totalAssets + d.totalCurrent)}</strong> combined
               {execSip > 0 && <> · executed SIP <strong className="text-[#0F3A46]">{fmt(execSip)}/mo</strong></>}
+              {" "}(see Live Assets register for the itemised view)
             </p>
           </div>
         </Section>
