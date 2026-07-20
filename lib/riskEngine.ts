@@ -136,7 +136,7 @@ const UNSECURED_TYPES = new Set([
 
 export interface AnalysisResult {
   client: ClientRow;
-  facts: FinancialFacts | null;
+  facts: ExtendedFacts | null;
   cap: number;
   tol: number;
   kn: number;
@@ -159,7 +159,7 @@ export interface AnalysisResult {
 
 export function analyseClient(
   client: ClientRow,
-  facts: FinancialFacts | null,
+  facts: ExtendedFacts | null,
   answers: RiskAnswer[],
   loans: LoanRow[],
   investments: InvestmentRow[],
@@ -183,7 +183,12 @@ export function analyseClient(
     (s, l) => s + ((l.loan_type && UNSECURED_TYPES.has(l.loan_type.toLowerCase())) ? (l.outstanding ?? 0) : 0),
     0
   );
-  const totalAssets = investments.reduce((s, i) => s + (i.value ?? 0), 0);
+  // Same composition as financialPosition() below — investments + property + EPF/NPS —
+  // so the debt-to-assets red flag and every downstream report/snapshot agree.
+  const investmentAssetsRaw = investments.reduce((s, i) => s + (i.value ?? 0), 0);
+  const propertyAssetsRaw = (facts?.house_value ?? 0) + (facts?.prop_value ?? 0);
+  const epfNpsRaw = facts?.epf_nps_corpus ?? 0;
+  const totalAssets = investmentAssetsRaw + propertyAssetsRaw + epfNpsRaw;
   const income = (facts?.income_self ?? 0) + (facts?.income_spouse ?? 0) + (facts?.income_other ?? 0);
 
   const goalsCalc = goals.map((g) => ({ ...g, ...goalCalc(g) }));
