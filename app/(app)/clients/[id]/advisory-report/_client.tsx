@@ -35,7 +35,8 @@ interface ReportData {
   goalRows: GoalRowD[]; totalExtraSip: number; totalLumpsumNow: number;
   positions: PositionD[];
   notes: { what_it_means: string; why_this_mix: string; deployment_plan: string;
-    conflicts: string; additional_comments: string; next_review_date: string; };
+    conflicts: string; additional_comments: string; next_review_date: string;
+    protect_actions: string; stabilise_actions: string; grow_actions: string; };
   firm: { advisor_name: string | null; firm_name: string | null; sebi_regn: string | null;
     address: string | null; phone: string | null; email: string | null; };
   adviserEmail: string;
@@ -77,6 +78,78 @@ function KV({ k, v }: { k: string; v: string }) {
   );
 }
 
+// ── SVG chart helpers (print-safe, no external libs) ──────────────────────────
+function DonutChart({ data, size = 150 }: { data: { label: string; value: number; color: string }[]; size?: number }) {
+  const total = data.reduce((s, x) => s + x.value, 0) || 1;
+  const R = size / 2 - 8, cx = size / 2, cy = size / 2, SW = 24;
+  let angle = -90;
+  const arcs = data.filter(x => x.value > 0).map((x, i) => {
+    const sweep = x.value / total * 360;
+    const a0 = angle * Math.PI / 180, a1 = (angle + sweep) * Math.PI / 180;
+    angle += sweep;
+    const large = sweep > 180 ? 1 : 0;
+    if (sweep >= 359.9) return <circle key={i} cx={cx} cy={cy} r={R} fill="none" stroke={x.color} strokeWidth={SW} />;
+    return <path key={i} d={`M ${cx + R * Math.cos(a0)} ${cy + R * Math.sin(a0)} A ${R} ${R} 0 ${large} 1 ${cx + R * Math.cos(a1)} ${cy + R * Math.sin(a1)}`}
+      fill="none" stroke={x.color} strokeWidth={SW} />;
+  });
+  return (
+    <div className="flex items-center gap-4">
+      <svg width={size} height={size}>{arcs}</svg>
+      <div className="space-y-1">
+        {data.filter(x => x.value > 0).map((x, i) => (
+          <div key={i} className="flex items-center gap-1.5 text-[10px]">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: x.color }} />
+            <span className="text-[#0F3A46] font-medium">{x.label}</span>
+            <span className="text-[#6B7E86]">{Math.round(x.value / total * 100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompareBars({ rows }: { rows: { label: string; target: number; current: number; color: string }[] }) {
+  const max = Math.max(...rows.map(r => Math.max(r.target, r.current)), 1);
+  return (
+    <div className="space-y-2">
+      {rows.map((r, i) => (
+        <div key={i}>
+          <div className="flex justify-between text-[9px] text-[#6B7E86] mb-0.5">
+            <span className="font-medium text-[#0F3A46]">{r.label}</span>
+            <span>target {r.target}% · current {r.current.toFixed(1)}%</span>
+          </div>
+          <div className="h-2 bg-[#EEF4F5] rounded-full mb-0.5"><div className="h-2 rounded-full" style={{ width: `${r.target / max * 100}%`, background: r.color }} /></div>
+          <div className="h-2 bg-[#EEF4F5] rounded-full"><div className="h-2 rounded-full opacity-50" style={{ width: `${r.current / max * 100}%`, background: r.color }} /></div>
+        </div>
+      ))}
+      <p className="text-[8px] text-[#6B7E86]">Solid = SAA target · Faded = current portfolio</p>
+    </div>
+  );
+}
+
+function HFundedBar({ pct }: { pct: number }) {
+  const color = pct >= 90 ? "#2E7D5B" : pct >= 50 ? "#C39A38" : "#B4463C";
+  return (
+    <div className="w-full h-1.5 bg-[#EEF4F5] rounded-full mt-0.5">
+      <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: color }} />
+    </div>
+  );
+}
+
+function ScoreBar({ label, score, max, color }: { label: string; score: number; max: number; color: string }) {
+  return (
+    <div className="mb-1.5">
+      <div className="flex justify-between text-[9px] mb-0.5">
+        <span className="font-medium text-[#0F3A46]">{label}</span>
+        <span className="text-[#6B7E86]">{score} / {max}</span>
+      </div>
+      <div className="h-2.5 bg-[#EEF4F5] rounded-full">
+        <div className="h-2.5 rounded-full" style={{ width: `${Math.min(100, score / max * 100)}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
 export default function AdvisoryReportClient({ clientId, data }: { clientId: string; data: ReportData }) {
   const d = data;
   const [notes, setNotes] = useState(d.notes);
@@ -107,6 +180,35 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
   const propSip  = openPositions.reduce((s, p) => s + p.monthly_sip, 0);
   const execLump = execPositions.reduce((s, p) => s + p.executed_lumpsum, 0);
   const execSip  = execPositions.reduce((s, p) => s + p.executed_sip, 0);
+
+  // ── Auto-derived Protect / Stabilise / Grow items ──────────────────────────
+  const flagText = d.analysis.flags.map(f => (f.name + " " + f.why).toLowerCase()).join(" | ");
+  const protectAuto: string[] = [];
+  if (flagText.includes("emergency")) protectAuto.push("Emergency fund below 6 months of expenses — top up before market investments.");
+  if (flagText.includes("life cover") || flagText.includes("insurance") || d.facts.life_cover < income * 10)
+    protectAuto.push(`Life cover ${fmt(d.facts.life_cover)} vs ~10× income guideline (${fmt(income * 10)}) — assess term insurance gap.`);
+  if (d.facts.health_cover < 500000) protectAuto.push("Health cover below ₹5 L — consider enhancing base + super top-up.");
+  if ((d.facts.will_status ?? "").toLowerCase() !== "yes") protectAuto.push("Will not in place — initiate estate documentation and confirm nominees.");
+  if (protectAuto.length === 0) protectAuto.push("Protection basics in place — maintain covers and review nominees annually.");
+
+  const stabiliseAuto: string[] = [];
+  if (flagText.includes("debt") || flagText.includes("emi") || debtToAssets > 40)
+    stabiliseAuto.push(`Debt is ${debtToAssets}% of assets — prioritise high-interest debt reduction before fresh investment.`);
+  if (savingsRate < 15) stabiliseAuto.push(`Savings rate ${savingsRate}% — target 20%+ via expense review before scaling SIPs.`);
+  const shortGoals = d.goalRows.filter(g => g.years <= 3 && g.gap > 0);
+  if (shortGoals.length > 0) stabiliseAuto.push(`${shortGoals.length} goal(s) within 3 years underfunded — route their corpus to debt/liquid, not equity.`);
+  const debtGap = d.gapClasses.find(g => g.assetClass === "Debt" && g.gapValue > 0);
+  if (debtGap) stabiliseAuto.push(`Debt allocation ${fmt(debtGap.gapValue)} below SAA target — add via short-duration funds.`);
+  if (stabiliseAuto.length === 0) stabiliseAuto.push("Balance sheet stable — maintain current debt and liquidity discipline.");
+
+  const growAuto: string[] = [];
+  const eqGap = d.gapClasses.find(g => g.assetClass === "Equity" && g.gapValue > 0);
+  if (eqGap) growAuto.push(`Equity ${fmt(eqGap.gapValue)} below the ${eqGap.targetPct}% SAA target — deploy per proposed portfolio.`);
+  if (d.totalExtraSip > 0) growAuto.push(`Goals need ${fmt(d.totalExtraSip)}/mo additional SIP (or ${fmt(d.totalLumpsumNow)} lumpsum today) — see Section 10.`);
+  const longGoals = d.goalRows.filter(g => g.years > 7);
+  if (longGoals.length > 0) growAuto.push(`${longGoals.length} long-horizon goal(s) — equity-heavy allocation appropriate for ${d.analysis.activeProfile} profile.`);
+  if (surplus > 0 && propSip < surplus / 12) growAuto.push(`Monthly surplus ~${fmt(surplus / 12)} — headroom exists to raise SIP commitments.`);
+  if (growAuto.length === 0) growAuto.push("Allocation at target and goals funded — stay invested and rebalance annually.");
 
   const NComment = ({ label, field, ph }: { label: string; field: keyof typeof notes; ph: string }) => (
     <div className="mt-3">
@@ -251,6 +353,29 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
               </tr>
             </tbody>
           </table>
+          <div className="grid grid-cols-2 gap-6 mb-2">
+            <div>
+              <ScoreBar label="Risk Capacity" score={d.scores.cap} max={40} color="#175A69" />
+              <ScoreBar label="Risk Tolerance" score={d.scores.tol} max={35} color="#C39A38" />
+              <ScoreBar label="Knowledge & Experience" score={d.scores.kn} max={20} color="#7B5EA7" />
+            </div>
+            <div className="flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-[10px] text-[#6B7E86] mb-1">TOTAL RISK SCORE</div>
+                <div className="relative w-32 h-32 mx-auto">
+                  <svg width="128" height="128" viewBox="0 0 128 128">
+                    <circle cx="64" cy="64" r="54" fill="none" stroke="#EEF4F5" strokeWidth="12" />
+                    <circle cx="64" cy="64" r="54" fill="none" stroke={profColor} strokeWidth="12"
+                      strokeDasharray={`${d.scores.total / 95 * 339} 339`} strokeLinecap="round" transform="rotate(-90 64 64)" />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-bold text-[#0F3A46]">{d.scores.total}</span>
+                    <span className="text-[9px] text-[#6B7E86]">of 95</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <p className="text-[10px] text-[#6B7E86]">
             The governing profile takes the LOWER of capacity and tolerance — advice must never exceed what the client can afford, even if willing.
             {d.analysis.isOverridden && <> <strong className="text-[#B4463C]">Adviser override applied</strong> — engine derived &quot;{d.analysis.engineProfile}&quot;; the adviser has set &quot;{d.analysis.activeProfile}&quot; (rationale must be documented below).</>}
@@ -284,8 +409,65 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
             ph="Address each flag: emergency fund plan, insurance gap actions, debt restructuring advice…" />
         </Section>
 
-        {/* 5 · Financial position */}
-        <Section num="5" title="CURRENT FINANCIAL POSITION">
+
+        {/* 5 · Recommended action plan — Protect / Stabilise / Grow */}
+        <Section num="5" title="RECOMMENDED ACTION PLAN — PROTECT · STABILISE · GROW">
+          <p className="text-[10px] text-[#6B7E86] mb-3">
+            Recommendations are organised in strict priority order: <strong className="text-[#2E7D5B]">Protect</strong> the downside first,
+            <strong className="text-[#C39A38]"> Stabilise</strong> the balance sheet next, then <strong className="text-[#175A69]">Grow</strong> wealth toward goals.
+            Auto-identified items below are derived from the risk flags, cover gaps and allocation analysis; the adviser&apos;s specific actions follow each pillar.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            {/* PROTECT */}
+            <div className="border-2 border-[#2E7D5B] rounded-lg overflow-hidden">
+              <div className="bg-[#2E7D5B] text-white px-3 py-2">
+                <p className="text-xs font-bold">🛡 PROTECT</p>
+                <p className="text-[8px] opacity-80">Emergency fund · Insurance · Estate</p>
+              </div>
+              <div className="p-3">
+                <ul className="space-y-1 mb-2">
+                  {protectAuto.map((s, i) => <li key={i} className="text-[9px] text-[#0F3A46]">• {s}</li>)}
+                </ul>
+                <textarea value={notes.protect_actions} onChange={setN("protect_actions")} rows={3}
+                  placeholder="Adviser actions: e.g. Build 6-month emergency fund via liquid fund SIP of ₹X/mo; buy ₹X Cr term cover…"
+                  className="w-full border border-dashed border-[#A0C4CE] bg-[#FBFDFD] rounded px-2 py-1.5 text-[9px] text-[#0F3A46] outline-none focus:border-[#2E7D5B] resize-y print:border-solid" />
+              </div>
+            </div>
+            {/* STABILISE */}
+            <div className="border-2 border-[#C39A38] rounded-lg overflow-hidden">
+              <div className="bg-[#C39A38] text-[#0F3A46] px-3 py-2">
+                <p className="text-xs font-bold">⚖ STABILISE</p>
+                <p className="text-[8px] opacity-80">Debt · Cash flow · Short-term goals</p>
+              </div>
+              <div className="p-3">
+                <ul className="space-y-1 mb-2">
+                  {stabiliseAuto.map((s, i) => <li key={i} className="text-[9px] text-[#0F3A46]">• {s}</li>)}
+                </ul>
+                <textarea value={notes.stabilise_actions} onChange={setN("stabilise_actions")} rows={3}
+                  placeholder="Adviser actions: e.g. Prepay credit card debt before investing; park short-term goal money in debt funds…"
+                  className="w-full border border-dashed border-[#A0C4CE] bg-[#FBFDFD] rounded px-2 py-1.5 text-[9px] text-[#0F3A46] outline-none focus:border-[#C39A38] resize-y print:border-solid" />
+              </div>
+            </div>
+            {/* GROW */}
+            <div className="border-2 border-[#175A69] rounded-lg overflow-hidden">
+              <div className="bg-[#175A69] text-white px-3 py-2">
+                <p className="text-xs font-bold">📈 GROW</p>
+                <p className="text-[8px] opacity-80">Equity allocation · SIP · Long-term goals</p>
+              </div>
+              <div className="p-3">
+                <ul className="space-y-1 mb-2">
+                  {growAuto.map((s, i) => <li key={i} className="text-[9px] text-[#0F3A46]">• {s}</li>)}
+                </ul>
+                <textarea value={notes.grow_actions} onChange={setN("grow_actions")} rows={3}
+                  placeholder="Adviser actions: e.g. Start ₹X/mo SIP across recommended equity funds; deploy bonus via 6-month STP…"
+                  className="w-full border border-dashed border-[#A0C4CE] bg-[#FBFDFD] rounded px-2 py-1.5 text-[9px] text-[#0F3A46] outline-none focus:border-[#175A69] resize-y print:border-solid" />
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        {/* 6 · Financial position */}
+        <Section num="6" title="CURRENT FINANCIAL POSITION">
           <div className="grid grid-cols-2 gap-x-8">
             <div>
               <KV k="Gross annual income (household)" v={fmt(income)} />
@@ -302,6 +484,21 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
               <KV k="Life / Health cover" v={`${fmt(d.facts.life_cover)} / ${fmt(d.facts.health_cover)}`} />
             </div>
           </div>
+          <div className="mt-3 mb-2">
+            <p className="text-[9px] font-semibold text-[#6B7E86] mb-1">NET WORTH COMPOSITION</p>
+            <div className="flex h-5 rounded-lg overflow-hidden border border-[#E7EFEF]">
+              {d.fp.totalAssets > 0 && (
+                <div className="flex items-center justify-center text-[8px] text-white font-semibold" style={{ width: `${d.fp.totalAssets / (d.fp.totalAssets + d.fp.totalDebt || 1) * 100}%`, background: "#2E7D5B" }}>
+                  Assets {fmt(d.fp.totalAssets)}
+                </div>
+              )}
+              {d.fp.totalDebt > 0 && (
+                <div className="flex items-center justify-center text-[8px] text-white font-semibold" style={{ width: `${d.fp.totalDebt / (d.fp.totalAssets + d.fp.totalDebt || 1) * 100}%`, background: "#B4463C" }}>
+                  Debt {fmt(d.fp.totalDebt)}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="mt-2 bg-[#F5F9FA] rounded-lg px-3 py-2">
             <p className="text-[10px] text-[#6B7E86]">
               Live portfolio tracked on platform: <strong className="text-[#0F3A46]">{fmt(d.totalCurrent)}</strong> current value
@@ -311,7 +508,7 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
         </Section>
 
         {/* 6 · Goals */}
-        <Section num="6" title="FINANCIAL GOALS & FUNDING ANALYSIS (dynamic — includes live portfolio)">
+        <Section num="7" title="FINANCIAL GOALS & FUNDING ANALYSIS (dynamic — includes live portfolio)">
           {d.goalRows.length === 0 ? <p className="text-xs text-[#6B7E86]">No goals recorded.</p> : (
             <>
               <table className="w-full text-[10px]">
@@ -333,7 +530,9 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
                       <td className="px-2 py-1.5 text-right">{fmt(g.cost_today)}</td>
                       <td className="px-2 py-1.5 text-right">{fmt(g.fv)}</td>
                       <td className="px-2 py-1.5 text-right">{fmt(g.projected)}{g.liveSaved > 0 && <span className="text-[#175A69]"> *</span>}</td>
-                      <td className="px-2 py-1.5 text-right font-semibold" style={{ color: g.fundedPct >= 90 ? "#2E7D5B" : g.fundedPct >= 50 ? "#C39A38" : "#B4463C" }}>{g.fundedPct}%</td>
+                      <td className="px-2 py-1.5 text-right font-semibold" style={{ color: g.fundedPct >= 90 ? "#2E7D5B" : g.fundedPct >= 50 ? "#C39A38" : "#B4463C" }}>
+                        {g.fundedPct}%<HFundedBar pct={g.fundedPct} />
+                      </td>
                       <td className="px-2 py-1.5 text-right font-semibold" style={{ color: g.extraSip > 0 ? "#B4463C" : "#2E7D5B" }}>{g.extraSip > 0 ? fmt(g.extraSip) + "/mo" : "—"}</td>
                       <td className="px-2 py-1.5 text-right font-semibold text-[#8A6D1C]">{g.lumpsumNow > 0 ? fmt(g.lumpsumNow) : "—"}</td>
                     </tr>
@@ -353,7 +552,18 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
         </Section>
 
         {/* 7 · Asset allocation */}
-        <Section num="7" title={`RECOMMENDED STRATEGIC ASSET ALLOCATION${d.isSaaOverridden ? " (adviser-customised)" : ""}`}>
+        <Section num="8" title={`RECOMMENDED STRATEGIC ASSET ALLOCATION${d.isSaaOverridden ? " (adviser-customised)" : ""}`}>
+          <div className="grid grid-cols-2 gap-6 mb-4">
+            <div>
+              <p className="text-[9px] font-semibold text-[#6B7E86] mb-2">TARGET ALLOCATION</p>
+              <DonutChart data={Object.entries(d.saa).filter(([,v]) => v > 0).map(([k, v]) => ({ label: k, value: v, color: AC_COLOR[k] ?? "#999" }))} />
+            </div>
+            <div>
+              <p className="text-[9px] font-semibold text-[#6B7E86] mb-2">TARGET vs CURRENT</p>
+              <CompareBars rows={d.gapClasses.filter(g => g.targetPct > 0 || g.currentPct > 0).map(g => ({
+                label: g.assetClass, target: g.targetPct, current: g.currentPct, color: AC_COLOR[g.assetClass] ?? "#999" }))} />
+            </div>
+          </div>
           <table className="w-full text-xs mb-2">
             <thead><tr className="bg-[#F5F9FA] text-[#6B7E86]">
               <th className="text-left px-3 py-1.5 font-medium">Asset class</th>
@@ -386,7 +596,7 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
         </Section>
 
         {/* 8 · Proposed portfolio */}
-        <Section num="8" title="PROPOSED PORTFOLIO & IMPLEMENTATION STATUS">
+        <Section num="9" title="PROPOSED PORTFOLIO & IMPLEMENTATION STATUS">
           {d.positions.length === 0 ? <p className="text-xs text-[#6B7E86]">No portfolio constructed yet — see Portfolio Construction.</p> : (
             <>
               <table className="w-full text-[10px]">
@@ -430,7 +640,7 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
         </Section>
 
         {/* 9 · Investment requirement summary */}
-        <Section num="9" title="INVESTMENT REQUIREMENT SUMMARY">
+        <Section num="10" title="INVESTMENT REQUIREMENT SUMMARY">
           <div className="grid grid-cols-2 gap-4">
             <div className="border border-[#E4B3AE] bg-[#FFF7F6] rounded-lg p-4">
               <p className="text-xs font-semibold text-[#B4463C] mb-1">Route A — Monthly SIP</p>
@@ -446,7 +656,7 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
         </Section>
 
         {/* 10 · Adviser remarks + review */}
-        <Section num="10" title="ADVISER REMARKS & NEXT REVIEW">
+        <Section num="11" title="ADVISER REMARKS & NEXT REVIEW">
           <NComment label="Additional remarks" field="additional_comments"
             ph="Any other observations, client-specific constraints, product suitability notes, disclosures of conflicts of interest…" />
           <div className="flex items-center gap-3 mt-3">
@@ -458,7 +668,7 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
         </Section>
 
         {/* 11 · Disclosures & signatures */}
-        <Section num="11" title="DISCLOSURES, DECLARATION & SIGNATURES">
+        <Section num="12" title="DISCLOSURES, DECLARATION & SIGNATURES">
           <div className="text-[9px] text-[#6B7E86] space-y-1.5 mb-4">
             <p><strong className="text-[#0F3A46]">Disclosures:</strong> This report is prepared based on information provided by the client in the risk profiling questionnaire and subsequent updates. Projections use assumed rates of return and inflation which are indicative only — actual outcomes will differ. Investments in securities markets are subject to market risks; read all scheme-related documents carefully. Past performance is not indicative of future returns. The adviser confirms this advice has been assessed for suitability against the client&apos;s risk profile under Regulation 17 of the SEBI (IA) Regulations, 2013.</p>
             <p><strong className="text-[#0F3A46]">Client acknowledgement:</strong> I/We confirm having read and understood this report, including the risk profile assessment, recommended allocation and the assumptions used. I/We have had the opportunity to seek clarifications.</p>

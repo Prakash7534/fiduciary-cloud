@@ -178,6 +178,9 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
       what_it_means: notes?.what_it_means ?? "", why_this_mix: notes?.why_this_mix ?? "",
       deployment_plan: notes?.deployment_plan ?? "", conflicts: notes?.conflicts ?? "",
       additional_comments: notes?.additional_comments ?? "",
+      protect_actions: notes?.protect_actions ?? "",
+      stabilise_actions: notes?.stabilise_actions ?? "",
+      grow_actions: notes?.grow_actions ?? "",
       next_review_date: notes?.next_review_date ?? nextReview.toISOString().slice(0, 10),
     },
     firm: {

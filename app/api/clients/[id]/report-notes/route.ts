@@ -11,6 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const body = await req.json() as {
     what_it_means?: string; why_this_mix?: string; deployment_plan?: string;
     conflicts?: string; additional_comments?: string; next_review_date?: string | null;
+    protect_actions?: string; stabilise_actions?: string; grow_actions?: string;
   };
 
   const { error } = await supabase.from("report_notes").upsert({
@@ -20,6 +21,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     deployment_plan:     body.deployment_plan ?? null,
     conflicts:           body.conflicts ?? null,
     additional_comments: body.additional_comments ?? null,
+    protect_actions:     body.protect_actions ?? null,
+    stabilise_actions:   body.stabilise_actions ?? null,
+    grow_actions:        body.grow_actions ?? null,
     next_review_date:    body.next_review_date || null,
     updated_at: new Date().toISOString(),
   }, { onConflict: "client_id" });
