@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from "pdf-lib";
+import { archivePdf } from "@/lib/documentArchive";
+import { asAtLabel } from "@/lib/priceStaleness";
 
 export const runtime = "nodejs";
 
@@ -99,7 +101,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     y -= 24;
 
     line("Instrument / Class", `${r.asset_class ?? "-"}${r.category ? " · " + r.category : ""}`);
-    line("Current market price", fmt(r.current_price));
+    line("Current market price", `${fmt(r.current_price)}  (${asAtLabel(r.price_date)})`);
     line("Consider (target) price", r.consider_price_max != null && r.consider_price_max !== r.consider_price
       ? `${fmt(r.consider_price)} to ${fmt(r.consider_price_max)}` : fmt(r.consider_price), true);
     line("Investment term", r.term ?? "-", true);
@@ -155,6 +157,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const filename = recId && recs[0]?.doc_id
     ? `${recs[0].doc_id}.pdf`
     : `Recommendations_${cl.client_code ?? "Client"}_${today.replace(/\s/g, "-")}.pdf`;
+
+  await archivePdf(supabase, {
+    clientId: id, docType: "recommendation_report", fileName: filename,
+    bytes: Buffer.from(bytes), createdBy: user.email, metadata: { doc_id: docId, count: recs.length },
+  });
 
   await supabase.from("client_activity_log").insert({
     client_id: id, event_type: "recommendation_report_generated",

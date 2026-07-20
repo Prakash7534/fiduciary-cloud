@@ -10,7 +10,7 @@ export interface UniverseRow {
   risk_level: string | null; expense_ratio: number | null;
   return_3y: number | null; return_5y: number | null;
   min_sip: number | null; isin: string | null; ticker: string | null;
-  current_price: number | null;
+  current_price: number | null; price_date: string | null;
 }
 
 export interface GoalInput {

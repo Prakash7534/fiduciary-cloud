@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont, PDFForm } from "pdf-lib";
+import { archivePdf } from "@/lib/documentArchive";
 
 export const runtime = "nodejs";
 
@@ -508,6 +509,12 @@ export async function GET(
   // ── serialize ──────────────────────────────────────────────────────────────
   const pdfBytes = await pdfDoc.save();
   const filename = `Review_${cl.client_code ?? cl.full_name?.replace(/\s+/g,"_")}_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}.pdf`;
+
+  // Archive the issued blank/prefilled review form
+  await archivePdf(supabase, {
+    clientId: id, docType: "review_blank_issued", fileName: filename,
+    bytes: Buffer.from(pdfBytes), createdBy: user.email, metadata: { doc_id: docId },
+  });
 
   // Log download
   await supabase.from("client_activity_log").insert({

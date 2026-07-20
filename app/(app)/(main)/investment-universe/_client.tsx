@@ -2,6 +2,7 @@
 "use client";
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { asAtLabel, staleness, STALENESS_CLASS } from "@/lib/priceStaleness";
 
 export interface Instrument {
   instrument_id: string; user_id?: string;
@@ -612,7 +613,7 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
                       {item.current_price != null ? (
                         <div>
                           <div className="font-semibold text-[#0F3A46]">{fmt(item.current_price)}</div>
-                          {item.price_date && <div className="text-[10px] text-[#6B7E86]">{item.price_date.slice(0,10)}</div>}
+                          <div className={`text-[10px] ${STALENESS_CLASS[staleness(item.price_date)]}`}>{asAtLabel(item.price_date)}</div>
                         </div>
                       ) : <span className="text-[#6B7E86]">—</span>}
                     </td>

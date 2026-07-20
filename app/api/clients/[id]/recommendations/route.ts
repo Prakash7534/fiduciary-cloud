@@ -28,6 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     asset_class: body.asset_class ?? null,
     category: body.category ?? null,
     current_price: body.current_price ?? null,
+    price_date: body.price_date ?? null,
     consider_price: body.consider_price ?? null,
     consider_price_max: body.consider_price_max ?? null,
     term: body.term ?? null,

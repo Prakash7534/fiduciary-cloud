@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PDFDocument } from "pdf-lib";
+import { archivePdf } from "@/lib/documentArchive";
 import fs from "fs";
 import path from "path";
 
@@ -316,6 +317,11 @@ export async function GET(
   // ── serialize and return ──────────────────────────────────────────────────
   const pdfBytes = await pdfDoc.save();
   const filename = `Questionnaire_${cl.client_code ?? cl.full_name?.replace(/\s+/g, "_") ?? "Client"}_${now.replace(/\s/g, "-")}.pdf`;
+
+  await archivePdf(supabase, {
+    clientId: id, docType: "questionnaire_blank_issued", fileName: filename,
+    bytes: Buffer.from(pdfBytes), createdBy: user.email,
+  });
 
   return new NextResponse(Buffer.from(pdfBytes), {
     status: 200,

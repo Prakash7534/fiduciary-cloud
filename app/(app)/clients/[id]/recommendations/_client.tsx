@@ -3,10 +3,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UniverseRow } from "@/lib/allocationEngine";
 import { assessRecommendation } from "@/lib/recommendationEngine";
+import { asAtLabel, staleness, STALENESS_CLASS } from "@/lib/priceStaleness";
 
 interface Rec {
   rec_id: string; scrip_name: string; asset_class: string | null; category: string | null;
-  current_price: number | null; consider_price: number | null; consider_price_max: number | null; term: string | null;
+  current_price: number | null; price_date: string | null; consider_price: number | null; consider_price_max: number | null; term: string | null;
   rationale_market: string | null; rationale_suitability: string | null; key_risks: string | null;
   concentration_cap_pct: number | null; cap_headroom: number | null; suggested_amount: number | null;
   status: string; rejected_reason: string | null; executed_amount: number | null;
@@ -66,7 +67,7 @@ export default function RecommendationsClient(p: Props) {
       body: JSON.stringify({
         client_code: p.clientCode, instrument_id: sel.instrument_id, scrip_name: sel.name ?? sel.instrument_id,
         asset_class: sel.asset_class, category: sel.category,
-        current_price: sel.current_price, consider_price: considerPrice || null,
+        current_price: sel.current_price, price_date: sel.price_date, consider_price: considerPrice || null,
         consider_price_max: considerPriceMax || null, term,
         rationale_market: ratMarket, rationale_suitability: ratSuit, key_risks: risks,
         concentration_cap_pct: p.capPct,
@@ -135,7 +136,7 @@ export default function RecommendationsClient(p: Props) {
                   <button key={u.instrument_id} onClick={() => pick(u)}
                     className="w-full text-left px-3 py-2 hover:bg-[#F5F9FA] flex justify-between items-center">
                     <span className="text-sm text-[#0F3A46] font-medium">{u.name ?? u.instrument_id}</span>
-                    <span className="text-xs text-[#6B7E86]">{u.asset_class} · {u.category ?? "—"} · {u.risk_level ?? "—"}{u.current_price ? ` · ₹${u.current_price}` : ""}</span>
+                    <span className="text-xs text-[#6B7E86]">{u.asset_class} · {u.category ?? "—"} · {u.risk_level ?? "—"}{u.current_price ? ` · ₹${u.current_price} (${asAtLabel(u.price_date)})` : ""}</span>
                   </button>
                 ))}
               </div>
@@ -151,7 +152,8 @@ export default function RecommendationsClient(p: Props) {
               </div>
               <div className="grid grid-cols-5 gap-3">
                 <div><label className="text-[10px] text-[#6B7E86]">Current price</label>
-                  <p className="text-sm font-semibold text-[#0F3A46] mt-1">{fmt(sel.current_price)}</p></div>
+                  <p className="text-sm font-semibold text-[#0F3A46] mt-1">{fmt(sel.current_price)}</p>
+                  <p className={`text-[10px] ${STALENESS_CLASS[staleness(sel.price_date)]}`}>{asAtLabel(sel.price_date)}</p></div>
                 <div><label className="text-[10px] text-[#6B7E86]">Consider from (₹)</label>
                   <input type="number" value={considerPrice} onChange={e => setConsiderPrice(e.target.value ? Number(e.target.value) : "")}
                     className="w-full border border-[#CBD9DC] rounded px-2 py-1 text-sm mt-0.5" /></div>
@@ -207,7 +209,7 @@ export default function RecommendationsClient(p: Props) {
             </div>
           </div>
           <div className="px-5 py-3 grid grid-cols-5 gap-3 text-xs border-b border-[#EEF4F5]">
-            <div><p className="text-[#6B7E86]">Current price</p><p className="font-semibold text-[#0F3A46]">{fmt(r.current_price)}</p></div>
+            <div><p className="text-[#6B7E86]">Current price</p><p className="font-semibold text-[#0F3A46]">{fmt(r.current_price)}</p><p className={`text-[10px] ${STALENESS_CLASS[staleness(r.price_date)]}`}>{asAtLabel(r.price_date)}</p></div>
             <div><p className="text-[#6B7E86]">Consider price</p><p className="font-semibold text-[#0F3A46]">{fmt(r.consider_price)}{r.consider_price_max ? " – " + fmt(r.consider_price_max) : ""}</p></div>
             <div><p className="text-[#6B7E86]">Consider now</p><p className="font-semibold text-[#C39A38]">{fmt(r.suggested_amount)}</p></div>
             <div><p className="text-[#6B7E86]">Cap headroom</p><p className="font-semibold text-[#0F3A46]">{fmt(r.cap_headroom)} ({r.concentration_cap_pct}%)</p></div>

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PDFDocument } from "pdf-lib";
 import { analyseClient, financialPosition, scoreAnswers, goalCalc } from "@/lib/riskEngine";
+import { archivePdf } from "@/lib/documentArchive";
 import type { FinancialFacts, LoanRow, InvestmentRow, RiskAnswer, GoalRow, ClientRow } from "@/lib/riskEngine";
 
 export const runtime = "nodejs";
@@ -466,6 +467,16 @@ export async function POST(
     .update({ submitted_at: new Date().toISOString() })
     .eq("client_id", id)
     .is("submitted_at", null);
+
+  // ── Archive the actual submitted PDF (signed source of truth) ──────────────
+  await archivePdf(supabase, {
+    clientId: id,
+    docType: isReview ? "review_submitted" : "questionnaire_submitted",
+    fileName,
+    bytes: Buffer.from(pdfBuffer),
+    createdBy: user.email,
+    metadata: { loaded },
+  });
 
   // ── Insert activity log entry ──────────────────────────────────────────────
   await supabase.from("client_activity_log").insert({
