@@ -44,7 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   pdf.setTitle(`Investment Recommendations – ${cl.full_name}`);
   pdf.setAuthor("Fiduciary Cloud"); pdf.setCreationDate(now);
 
-  let page: PDFPage; let y = 0; let pageNum = 0;
+  let page!: PDFPage; let y = 0; let pageNum = 0;
   const newPage = () => {
     page = pdf.addPage([W, H]); pageNum++;
     page.drawRectangle({ x: 0, y: H - 58, width: W, height: 58, color: DARK });
