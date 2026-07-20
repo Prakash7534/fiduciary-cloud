@@ -220,6 +220,21 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
 
   return (
     <div>
+      {/* Print isolation: hide app chrome, show only the report */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #advisory-report, #advisory-report * { visibility: visible !important; }
+          #advisory-report {
+            position: absolute !important;
+            left: 0 !important; top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important; padding: 0 !important;
+            border: none !important; border-radius: 0 !important;
+          }
+          @page { size: A4; margin: 12mm; }
+        }
+      `}</style>
       {/* Action bar */}
       <div className="flex items-center justify-between mb-5 gap-3 print:hidden">
         <div className="flex gap-2">
@@ -240,7 +255,7 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
       </div>
 
       {/* ═══ REPORT ═══ */}
-      <div className="bg-white border border-[#CBD9DC] rounded-xl p-8 space-y-6 print:border-0 print:rounded-none print:p-0">
+      <div id="advisory-report" className="bg-white border border-[#CBD9DC] rounded-xl p-8 space-y-6 print:border-0 print:rounded-none print:p-0">
 
         {/* Letterhead */}
         <div className="border-b-4 border-[#0F3A46] pb-4">
