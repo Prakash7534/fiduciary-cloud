@@ -40,6 +40,15 @@ interface ReportData {
   firm: { advisor_name: string | null; firm_name: string | null; sebi_regn: string | null;
     address: string | null; phone: string | null; email: string | null; };
   adviserEmail: string;
+  reviewCompare: {
+    prevDate: string; curDate: string;
+    prevProfile: string | null; curProfile: string | null;
+    prevScore: number | null; curScore: number | null;
+    prevNW: number | null; curNW: number | null;
+    prevIncome: number | null; curIncome: number | null;
+    prevFlags: number | null; curFlags: number | null;
+    goalProgress: { name: string; before: number | null; after: number }[];
+  } | null;
 }
 
 const AC_COLOR: Record<string, string> = {
@@ -522,7 +531,68 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
           </div>
         </Section>
 
-        {/* 6 · Goals */}
+        {/* 6A · Review comparison */}
+        {d.reviewCompare && (
+          <Section num="6A" title={`REVIEW COMPARISON — ${d.reviewCompare.prevDate} vs ${d.reviewCompare.curDate}`}>
+            {d.reviewCompare.prevProfile !== d.reviewCompare.curProfile && (
+              <div className="bg-[#FFF8EC] border border-[#E3D3A8] rounded-lg px-3 py-2 mb-3">
+                <p className="text-xs font-semibold text-[#8A6D1C]">⚠ Risk profile changed: {d.reviewCompare.prevProfile} → {d.reviewCompare.curProfile} — allocation and suitability re-assessed in this report.</p>
+              </div>
+            )}
+            <div className="grid grid-cols-4 gap-3 mb-3">
+              {[
+                ["Risk score", d.reviewCompare.prevScore, d.reviewCompare.curScore, false, true],
+                ["Net worth", d.reviewCompare.prevNW, d.reviewCompare.curNW, true, true],
+                ["Annual income", d.reviewCompare.prevIncome, d.reviewCompare.curIncome, true, true],
+                ["Red flags", d.reviewCompare.prevFlags, d.reviewCompare.curFlags, false, false],
+              ].map(([label, b, a, money, higherGood], i) => {
+                const bv = Number(b ?? 0), av = Number(a ?? 0), delta = av - bv;
+                const good = (higherGood as boolean) ? delta >= 0 : delta <= 0;
+                return (
+                  <div key={i} className="bg-[#F5F9FA] rounded-lg p-3 text-center">
+                    <div className="text-[9px] text-[#6B7E86] mb-1">{label as string}</div>
+                    <div className="text-xs text-[#6B7E86]">{money ? fmt(bv) : bv} →</div>
+                    <div className="text-sm font-bold text-[#0F3A46]">{money ? fmt(av) : av}</div>
+                    {delta !== 0 && (
+                      <div className="text-[9px] font-semibold mt-0.5" style={{ color: good ? "#2E7D5B" : "#B4463C" }}>
+                        {delta > 0 ? "▲ +" : "▼ "}{money ? fmt(Math.abs(delta)) : Math.abs(delta)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {d.reviewCompare.goalProgress.length > 0 && (
+              <>
+                <p className="text-[9px] font-semibold text-[#6B7E86] mb-1.5">GOAL PROGRESS SINCE PREVIOUS REVIEW</p>
+                <div className="space-y-2">
+                  {d.reviewCompare.goalProgress.map((g, i) => (
+                    <div key={i}>
+                      <div className="flex justify-between text-[10px] mb-0.5">
+                        <span className="font-medium text-[#0F3A46]">{g.name}</span>
+                        <span className="text-[#6B7E86]">
+                          {g.before != null ? `${g.before}% → ` : ""}<strong className="text-[#0F3A46]">{g.after}%</strong>
+                          {g.before != null && g.after !== g.before && (
+                            <span className="ml-1 font-semibold" style={{ color: g.after > g.before ? "#2E7D5B" : "#B4463C" }}>
+                              ({g.after > g.before ? "+" : ""}{g.after - g.before}pp)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="relative h-2 bg-[#EEF4F5] rounded-full overflow-hidden">
+                        {g.before != null && <div className="absolute h-2 bg-[#A0C4CE]" style={{ width: `${Math.min(100, g.before)}%` }} />}
+                        <div className="absolute h-2 rounded-full" style={{ width: `${Math.min(100, g.after)}%`, background: g.after >= (g.before ?? 0) ? "#2E7D5B" : "#B4463C", opacity: 0.85 }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[8px] text-[#6B7E86] mt-1.5">Light bar = previous review · solid = current · pp = percentage points. This section demonstrates movement toward goals between review cycles for audit purposes.</p>
+              </>
+            )}
+          </Section>
+        )}
+
+        {/* 7 · Goals */}
         <Section num="7" title="FINANCIAL GOALS & FUNDING ANALYSIS (dynamic — includes live portfolio)">
           {d.goalRows.length === 0 ? <p className="text-xs text-[#6B7E86]">No goals recorded.</p> : (
             <>

@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PDFDocument } from "pdf-lib";
+import { analyseClient, financialPosition, scoreAnswers, goalCalc } from "@/lib/riskEngine";
+import type { FinancialFacts, LoanRow, InvestmentRow, RiskAnswer, GoalRow, ClientRow } from "@/lib/riskEngine";
 
 export const runtime = "nodejs";
 
@@ -329,6 +331,62 @@ export async function POST(
       performed_by: user.email, metadata: { file_name: fileName, loaded },
     });
   }
+
+  // ── Create a SNAPSHOT from the freshly-loaded data (powers History + Trend) ─
+  const isReview = !!(rawField("ucc") || rawField("rv_full_name"));
+  try {
+    const [{ data: freshClient }, { data: freshFacts }, { data: freshAns },
+           { data: freshLoans }, { data: freshInv }, { data: freshGoals }] = await Promise.all([
+      supabase.from("clients").select("*").eq("client_id", id).single(),
+      supabase.from("financial_facts").select("*").eq("client_id", id).maybeSingle(),
+      supabase.from("risk_answers").select("*").eq("client_id", id),
+      supabase.from("loans").select("*").eq("client_id", id),
+      supabase.from("investments").select("*").eq("client_id", id),
+      supabase.from("goals").select("*").eq("client_id", id),
+    ]);
+    if (freshClient) {
+      const ans = (freshAns ?? []) as RiskAnswer[];
+      const sc = scoreAnswers(ans);
+      const an = analyseClient(freshClient as ClientRow, freshFacts as FinancialFacts | null, ans,
+        (freshLoans ?? []) as LoanRow[], (freshInv ?? []) as InvestmentRow[], (freshGoals ?? []) as GoalRow[]);
+      const fpos = financialPosition(freshFacts as FinancialFacts | null,
+        (freshLoans ?? []) as LoanRow[], (freshInv ?? []) as InvestmentRow[]);
+      const yr = new Date().getFullYear();
+      const goalSnap = ((freshGoals ?? []) as GoalRow[]).map(g => {
+        const gc = goalCalc(g, yr);
+        return {
+          name: g.goal_name, target_year: g.target_year, cost_today: g.cost_today,
+          saved: g.saved, monthly_sip: g.monthly_sip,
+          fv: Math.round(gc.fv), projected: Math.round(gc.path), gap: Math.round(gc.gap),
+          extra_sip: Math.round(gc.extraSip),
+          funded_pct: gc.fv > 0 ? Math.min(100, Math.round(gc.path / gc.fv * 100)) : 100,
+        };
+      });
+      await supabase.from("snapshots").insert({
+        client_id: id,
+        snapshot_date: new Date().toISOString(),
+        source_note: isReview ? `Review PDF: ${fileName}` : `Questionnaire PDF: ${fileName}`,
+        capacity_score: sc.cap, tolerance_score: sc.tol, knowledge_score: sc.kn,
+        total_score: sc.cap + sc.tol + sc.kn,
+        final_profile: an.finalProfile, answered_count: sc.answered,
+        income: fpos.income, total_assets: fpos.totalAssets,
+        total_debt: fpos.totalDebt, net_worth: fpos.netWorth,
+        years_to_retirement: an.yearsToRetirement,
+        red_flag_count: an.flags.filter(f => f.state === "bad").length,
+        raw_data: {
+          is_review: isReview,
+          goals: goalSnap,
+          flags: an.flags.filter(f => f.state === "bad").map(f => f.name),
+          expenses_annual: freshFacts?.expenses_annual ?? null,
+          life_cover: freshFacts?.life_cover ?? null,
+          health_cover: freshFacts?.health_cover ?? null,
+          loans_total: ((freshLoans ?? []) as LoanRow[]).reduce((s, l) => s + Number(l.outstanding ?? 0), 0),
+          loaded_sections: loaded,
+        },
+      });
+      loaded.push("snapshot");
+    }
+  } catch { /* snapshot failure must not block submission */ }
 
   // Mark link submitted
   await supabase

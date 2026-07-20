@@ -34,6 +34,7 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
     { data: positions },
     { data: holdings },
     { data: notes },
+    { data: snapPair },
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("client_id", id).single(),
     supabase.from("financial_facts").select("*").eq("client_id", id).maybeSingle(),
@@ -45,6 +46,7 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
     supabase.from("portfolio_positions").select("*").eq("client_id", id),
     supabase.from("portfolio_holdings").select("*").eq("client_id", id),
     supabase.from("report_notes").select("*").eq("client_id", id).maybeSingle(),
+    supabase.from("snapshots").select("*").eq("client_id", id).order("snapshot_date", { ascending: false }).limit(2),
   ]);
 
   if (error || !client) notFound();
@@ -136,6 +138,26 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
   const nextReview = new Date(now); nextReview.setFullYear(nextReview.getFullYear() + 1);
   const docId = `ADV-${client.client_code ?? id.slice(0,8).toUpperCase()}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
 
+  // ── Review comparison (previous vs current snapshot) ──────────────────────
+  type SnapRaw = { goals?: { name: string | null; funded_pct: number }[]; flags?: string[] } | null;
+  const curSnap  = snapPair?.[0] ?? null;
+  const prevSnap = snapPair?.[1] ?? null;
+  const reviewCompare = curSnap && prevSnap ? {
+    prevDate: new Date(prevSnap.snapshot_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+    curDate:  new Date(curSnap.snapshot_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+    prevProfile: prevSnap.final_profile as string | null, curProfile: curSnap.final_profile as string | null,
+    prevScore: prevSnap.total_score as number | null, curScore: curSnap.total_score as number | null,
+    prevNW: prevSnap.net_worth != null ? Number(prevSnap.net_worth) : null,
+    curNW:  curSnap.net_worth != null ? Number(curSnap.net_worth) : null,
+    prevIncome: prevSnap.income != null ? Number(prevSnap.income) : null,
+    curIncome:  curSnap.income != null ? Number(curSnap.income) : null,
+    prevFlags: prevSnap.red_flag_count as number | null, curFlags: curSnap.red_flag_count as number | null,
+    goalProgress: (((curSnap.raw_data ?? {}) as SnapRaw)?.goals ?? []).map(g => {
+      const pg = (((prevSnap.raw_data ?? {}) as SnapRaw)?.goals ?? []).find(x => x.name === g.name);
+      return { name: g.name ?? "Goal", before: pg?.funded_pct ?? null, after: g.funded_pct };
+    }),
+  } : null;
+
   const reportData = {
     docId, today,
     nextReviewDefault: nextReview.toISOString().slice(0, 10),
@@ -189,6 +211,7 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
       phone: firm?.phone ?? null, email: firm?.email ?? null,
     },
     adviserEmail: authUser?.email ?? "",
+    reviewCompare,
   };
 
   return <AdvisoryReportClient clientId={id} data={reportData} />;
