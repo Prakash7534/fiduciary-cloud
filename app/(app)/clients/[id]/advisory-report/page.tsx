@@ -86,10 +86,22 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
       : /gold/i.test(acRaw) ? "Gold" : "Alternate";
     declaredByClass[ac] = (declaredByClass[ac] ?? 0) + Number(i.value ?? 0);
   });
+  const declaredAtRep: Date | null = (investments ?? []).reduce<Date | null>((mx, i: Record<string, unknown>) => {
+    const d2 = i.declared_at ? new Date(i.declared_at as string) : null;
+    return d2 && (!mx || d2 > mx) ? d2 : mx;
+  }, null);
   const holdOnlyByClass: Record<string, number> = {};
   holdRows.forEach(h => {
     const v = (h.current_value ?? 0) > 0 ? (h.current_value ?? 0) : h.lumpsum_invested;
     holdOnlyByClass[h.asset_class] = (holdOnlyByClass[h.asset_class] ?? 0) + v;
+  });
+  (positions ?? []).forEach(p2 => {
+    if (p2.status !== "executed") return;
+    const execAt = p2.executed_at ? new Date(p2.executed_at as string) : null;
+    if (!declaredAtRep || !execAt || execAt > declaredAtRep) return;
+    const v = Number(p2.current_value ?? 0) > 0 ? Number(p2.current_value) : Number(p2.executed_lumpsum ?? 0);
+    const ac = String(p2.asset_class ?? "Equity");
+    holdOnlyByClass[ac] = (holdOnlyByClass[ac] ?? 0) + v;
   });
   const assetOverlap = Object.keys(declaredByClass).reduce(
     (s, ac) => s + Math.min(declaredByClass[ac] ?? 0, holdOnlyByClass[ac] ?? 0), 0);

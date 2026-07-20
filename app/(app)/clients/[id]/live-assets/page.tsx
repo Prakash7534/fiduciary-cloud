@@ -31,12 +31,28 @@ export default async function LiveAssetsPage({ params }: { params: Promise<{ id:
 
   const rows: Row[] = [];
 
-  // Holdings value per asset class — used to offset declared amounts of the same
-  // class, since manually itemised holdings usually re-describe declared money.
+  // ── Time-aware de-duplication ────────────────────────────────────────────
+  // A declaration made at time T already INCLUDES everything the platform
+  // tracked before T (holdings + positions executed before T). Those are
+  // netted from the declared figures. Positions executed AFTER T are new
+  // money on top of the declaration and stay fully additive.
+  const declaredAt: Date | null = (inv ?? []).reduce<Date | null>((mx, i) => {
+    const d = i.declared_at ? new Date(i.declared_at as string) : null;
+    return d && (!mx || d > mx) ? d : mx;
+  }, null);
+
   const holdingsByClass: Record<string, number> = {};
   (holdings ?? []).forEach(h => {
     const v = Number(h.current_value ?? 0) > 0 ? Number(h.current_value) : Number(h.lumpsum_invested ?? 0);
     const ac = String(h.asset_class ?? "Equity");
+    holdingsByClass[ac] = (holdingsByClass[ac] ?? 0) + v;
+  });
+  // Executed positions from BEFORE the declaration join the offset pool
+  (positions ?? []).forEach(p2 => {
+    const execAt = p2.executed_at ? new Date(p2.executed_at as string) : null;
+    if (!declaredAt || !execAt || execAt > declaredAt) return; // after declaration → new money
+    const v = Number(p2.current_value ?? 0) > 0 ? Number(p2.current_value) : Number(p2.executed_lumpsum ?? 0);
+    const ac = String(p2.asset_class ?? "Equity");
     holdingsByClass[ac] = (holdingsByClass[ac] ?? 0) + v;
   });
   const offsetUsed: Record<string, number> = {};
@@ -189,7 +205,7 @@ export default async function LiveAssetsPage({ params }: { params: Promise<{ id:
       ))}
 
       <p className="text-[10px] text-[#6B7E86]">
-        Declared assets come from the last submitted questionnaire, NET of any amount itemised as existing holdings in the same asset class — this prevents the same money being counted twice{totalOffset > 0 ? ` (₹${totalOffset.toLocaleString("en-IN")} de-duplicated on this view)` : ""}. Executed entries flow in automatically from Portfolio Construction and executed Recommendations. Values use current value where recorded, else the executed/declared amount.
+        Declared assets come from the last submitted questionnaire, NET of platform-tracked assets that existed before that declaration (itemised holdings + positions executed earlier) in the same asset class — the client&apos;s review declaration already includes them. Investments executed AFTER the declaration count as new money — this prevents the same money being counted twice{totalOffset > 0 ? ` (₹${totalOffset.toLocaleString("en-IN")} de-duplicated on this view)` : ""}. Executed entries flow in automatically from Portfolio Construction and executed Recommendations. Values use current value where recorded, else the executed/declared amount.
       </p>
     </div>
   );

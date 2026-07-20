@@ -294,7 +294,7 @@ export async function POST(
     for (let v = 1; v <= 9; v++) {
       const val = num(getField(`inv${v}_val`)); const sip = num(getField(`inv${v}_sip`));
       if (val == null && sip == null) continue;
-      invRows.push({ client_id: id, asset_class: INV_CLASSES[v-1], value: val ?? 0, monthly_sip: sip ?? 0 });
+      invRows.push({ client_id: id, asset_class: INV_CLASSES[v-1], value: val ?? 0, monthly_sip: sip ?? 0, declared_at: new Date().toISOString() });
     }
     if (invRows.length > 0) {
       await supabase.from("investments").delete().eq("client_id", id);
