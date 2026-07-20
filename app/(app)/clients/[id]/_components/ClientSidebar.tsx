@@ -53,7 +53,7 @@ export default function ClientSidebar({ clientId, clientName }: { clientId: stri
       items: [
         { label: "Advisory Report",        href: `${base}/advisory-report`, available: true },
         { label: "Portfolio Construction", href: `${base}/portfolio`,       available: true  },
-        { label: "Recommendation Log",     href: `${base}/recommendations`, available: false },
+        { label: "Recommendations",        href: `${base}/recommendations`, available: true },
         { label: "Advisor Notes",          href: `${base}/notes`,           available: false },
       ],
     },
