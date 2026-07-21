@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
   const { instrument_id, name, instrument_type, ticker, isin, asset_class, category,
     sub_bucket, risk_level, expense_ratio, return_3y, return_5y, min_sip,
     current_price, price_date, exchange, liquidity, taxation, esg, international,
-    min_knowledge, notes, currency } = body;
+    min_knowledge, notes, currency,
+    issuer, coupon_pct, maturity_date, ytm_pct, face_value, credit_rating } = body;
 
   if (!instrument_id || !name) {
     return NextResponse.json({ error: "instrument_id and name are required" }, { status: 400 });
@@ -22,7 +23,10 @@ export async function POST(req: NextRequest) {
     sub_bucket, risk_level, expense_ratio, return_3y, return_5y, min_sip,
     current_price, price_date: price_date || null, exchange, liquidity, taxation,
     esg: esg ?? false, international: international ?? false, min_knowledge, notes,
-    currency: currency ?? "INR", updated_at: new Date().toISOString(),
+    currency: currency ?? "INR",
+    issuer: issuer ?? null, coupon_pct: coupon_pct ?? null, maturity_date: maturity_date || null,
+    ytm_pct: ytm_pct ?? null, face_value: face_value ?? null, credit_rating: credit_rating ?? null,
+    updated_at: new Date().toISOString(),
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

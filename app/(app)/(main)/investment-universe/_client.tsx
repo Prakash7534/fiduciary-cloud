@@ -13,6 +13,8 @@ export interface Instrument {
   exchange: string | null; liquidity: string | null; taxation: string | null;
   esg: boolean | null; international: boolean | null; min_knowledge: string | null; notes: string | null;
   currency: string | null; created_at?: string; updated_at?: string;
+  issuer?: string | null; coupon_pct?: number | null; maturity_date?: string | null;
+  ytm_pct?: number | null; face_value?: number | null; credit_rating?: string | null;
 }
 
 const ASSET_CLASSES = ["Equity","Debt","Hybrid","Gold","International","Alternate"];
@@ -89,12 +91,13 @@ function SearchBox({ onSelect }: { onSelect: (r: LookupResult & { current_price?
     if (r.instrument_type === "MF" && r.ticker) {
       try {
         const res = await fetch(`/api/investment-universe/lookup?q=&details=${r.ticker}`);
-        const det: { isin?: string; nav?: number; category?: string } = await res.json();
+        const det: { isin?: string; nav?: number; category?: string; asset_class?: string } = await res.json();
         enriched = {
           ...r,
           isin: det.isin ?? r.isin,
           current_price: det.nav,
           category: det.category ?? r.category,
+          asset_class: det.asset_class ?? r.asset_class,
           instrument_id: det.isin ?? r.instrument_id, // use ISIN as ID for MFs
         };
       } catch { /* use as-is */ }
@@ -111,6 +114,11 @@ function SearchBox({ onSelect }: { onSelect: (r: LookupResult & { current_price?
           className="w-full border-2 border-[#175A69] rounded-lg px-3 py-2 text-[#0F3A46] focus:outline-none focus:ring-2 focus:ring-[#175A69]/30" />
         {loading && <span className="absolute right-3 top-2.5 text-[#6B7E86] text-xs">Searching…</span>}
       </div>
+      <button type="button"
+        onClick={() => { setOpen(false); setResults([]); onSelect({ instrument_id: "", name: q.trim(), instrument_type: "Bond", asset_class: "Debt", category: "Corporate Bond" }); }}
+        className="mt-1.5 text-[11px] text-[#175A69] hover:underline">
+        + Add a direct bond manually (G-Sec, SGB, corporate — not covered by the market feed)
+      </button>
       {open && results.length > 0 && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-[#CBD9DC] rounded-xl shadow-lg overflow-hidden">
           {results.map(r => (
@@ -134,7 +142,10 @@ function SearchBox({ onSelect }: { onSelect: (r: LookupResult & { current_price?
       )}
       {open && results.length === 0 && !loading && q.length >= 2 && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-[#CBD9DC] rounded-xl shadow-lg px-4 py-3 text-sm text-[#6B7E86]">
-          No matches found — fill fields manually below.
+          No matches in the fund / stock feed.
+          <button type="button"
+            onClick={() => { setOpen(false); onSelect({ instrument_id: "", name: q.trim(), instrument_type: "Bond", asset_class: "Debt", category: "Corporate Bond" }); }}
+            className="block mt-1 text-[#175A69] font-medium hover:underline">+ Add &ldquo;{q.trim()}&rdquo; as a direct bond</button>
         </div>
       )}
     </div>
@@ -242,6 +253,45 @@ function EditModal({ item, onClose, onSave }: {
             <input value={d.isin ?? ""} onChange={e => set("isin", e.target.value)}
               className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46]" />
           </div>
+          {/* Bond-specific details */}
+          {d.instrument_type === "Bond" && (
+            <div className="col-span-2 rounded-xl border border-[#E3C9BF] bg-[#FCF5F2] p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#8C2C1A] mb-1">Bond details</p>
+              <p className="text-[10px] text-[#8C6B60] mb-3">Direct bonds have no live market feed — enter these manually and update the price from your valuation source. Tip: use the ISIN as the Instrument ID above.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[#6B7E86] block mb-1">Issuer</label>
+                  <input value={d.issuer ?? ""} onChange={e => set("issuer", e.target.value)} placeholder="e.g. Govt of India / HDFC Ltd"
+                    className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46]" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#6B7E86] block mb-1">Credit rating</label>
+                  <input value={d.credit_rating ?? ""} onChange={e => set("credit_rating", e.target.value)} placeholder="AAA / AA+ / Sovereign"
+                    className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46]" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#6B7E86] block mb-1">Coupon (%)</label>
+                  <input type="number" value={d.coupon_pct ?? ""} onChange={e => set("coupon_pct", e.target.value ? parseFloat(e.target.value) : null)}
+                    className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46]" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#6B7E86] block mb-1">Yield to maturity (%)</label>
+                  <input type="number" value={d.ytm_pct ?? ""} onChange={e => set("ytm_pct", e.target.value ? parseFloat(e.target.value) : null)}
+                    className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46]" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#6B7E86] block mb-1">Maturity date</label>
+                  <input type="date" value={d.maturity_date?.slice(0,10) ?? ""} onChange={e => set("maturity_date", e.target.value)}
+                    className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46]" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#6B7E86] block mb-1">Face value (₹)</label>
+                  <input type="number" value={d.face_value ?? ""} onChange={e => set("face_value", e.target.value ? parseFloat(e.target.value) : null)}
+                    placeholder="1000 / 100" className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-[#0F3A46]" />
+                </div>
+              </div>
+            </div>
+          )}
           {/* Risk / Knowledge */}
           <div>
             <label className="text-xs text-[#6B7E86] block mb-1">Risk level</label>
@@ -601,7 +651,11 @@ export default function UniverseClient({ initialData }: { initialData: Instrumen
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-[#6B7E86] text-xs">{item.category ?? "—"}{item.sub_bucket ? ` · ${item.sub_bucket}` : ""}</td>
+                    <td className="px-4 py-3 text-[#6B7E86] text-xs">{item.instrument_type === "Bond"
+                      ? ([item.category, item.coupon_pct != null ? `${item.coupon_pct}% cpn` : null,
+                          item.maturity_date ? `mat ${item.maturity_date.slice(0,7)}` : null,
+                          item.ytm_pct != null ? `YTM ${item.ytm_pct}%` : null, item.credit_rating].filter(Boolean).join(" · ") || "—")
+                      : `${item.category ?? "—"}${item.sub_bucket ? " · " + item.sub_bucket : ""}`}</td>
                     <td className="px-4 py-3">
                       {item.risk_level && (
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${RISK_COLOR[item.risk_level] ?? "bg-[#DDE6E8] text-[#6B7E86]"}`}>
