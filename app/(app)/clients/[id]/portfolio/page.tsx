@@ -23,7 +23,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
       .select("full_name, dob, risk_override, allocation_overrides, concentration_cap")
       .eq("client_id", id).single(),
     supabase.from("risk_answers").select("question_num, answer").eq("client_id", id),
-    supabase.from("goals").select("goal_id, goal_name, target_year, cost_today").eq("client_id", id).order("target_year"),
+    supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
     supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
     supabase.from("investment_universe").select("*").order("asset_class").order("category"),
     supabase.from("portfolio_positions").select("*").eq("client_id", id).order("created_at"),
