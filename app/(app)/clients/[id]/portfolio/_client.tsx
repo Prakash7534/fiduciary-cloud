@@ -595,8 +595,11 @@ export default function PortfolioClient({
       executed_lumpsum: 0, executed_sip: 0, current_value: null, executed_at: null,
       status: "draft", notes: "Gap-based proposal", source: "engine",
     }));
-    // Keep executed positions, replace open proposals
-    setPositions(prev => [...prev.filter(p => p.status === "executed"), ...newPos]);
+    // Keep executed positions and anything the adviser added manually — only
+    // replace this engine's own prior (not-yet-executed) proposals. Blindly
+    // dropping every non-executed position here used to silently delete
+    // manually-added draft/pending/placed positions on every re-run.
+    setPositions(prev => [...prev.filter(p => p.status === "executed" || p.source !== "engine"), ...newPos]);
     setSaved(false);
   };
 

@@ -21,7 +21,7 @@ export default async function RecommendationsPage({ params }: { params: Promise<
     supabase.from("clients").select("full_name, client_code, risk_override, concentration_cap, allocation_overrides").eq("client_id", id).single(),
     supabase.from("risk_answers").select("*").eq("client_id", id),
     supabase.from("investment_universe").select("*").order("asset_class"),
-    supabase.from("portfolio_positions").select("instrument_id, asset_class, status, executed_lumpsum, current_value").eq("client_id", id),
+    supabase.from("portfolio_positions").select("instrument_id, asset_class, status, executed_lumpsum, current_value, lumpsum_amount").eq("client_id", id),
     supabase.from("portfolio_holdings").select("asset_class, current_value, lumpsum_invested").eq("client_id", id),
     supabase.from("recommendations").select("*").eq("client_id", id).order("created_at", { ascending: false }),
   ]);
@@ -46,13 +46,26 @@ export default async function RecommendationsPage({ params }: { params: Promise<
   const currentByClass = currentValueByClass(posRows, holdRows);
   const totalPortfolio = Object.values(currentByClass).reduce((s, v) => s + v, 0);
 
-  // Existing ₹ per instrument (executed only)
+  // Existing ₹ per instrument — executed positions count at current/executed
+  // value; non-executed (draft/pending/placed) positions and other pending
+  // recommendations count too, at their proposed amount, so cap headroom
+  // isn't overstated by ignoring money that's already spoken for elsewhere
+  // (double-fill risk: two proposals for the same scrip, each computed as if
+  // the other didn't exist, could jointly blow past the cap once both land).
   const byInstrument: Record<string, number> = {};
   (positions ?? []).forEach(p => {
-    if (p.status !== "executed") return;
-    const v = Number(p.current_value ?? 0) > 0 ? Number(p.current_value) : Number(p.executed_lumpsum ?? 0);
     const key = p.instrument_id as string;
+    if (!key) return;
+    const v = p.status === "executed"
+      ? (Number(p.current_value ?? 0) > 0 ? Number(p.current_value) : Number(p.executed_lumpsum ?? 0))
+      : Number(p.lumpsum_amount ?? 0);
     byInstrument[key] = (byInstrument[key] ?? 0) + v;
+  });
+  (recs ?? []).forEach(r => {
+    if (r.status !== "recommended") return; // executed already lives in portfolio_positions; rejected doesn't count
+    const key = r.instrument_id as string | null;
+    if (!key) return;
+    byInstrument[key] = (byInstrument[key] ?? 0) + Number(r.suggested_amount ?? 0);
   });
 
   return (

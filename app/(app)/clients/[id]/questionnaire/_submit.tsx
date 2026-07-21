@@ -10,6 +10,7 @@ export default function SubmitPanel({ clientId }: Props) {
   const [status, setStatus] = useState<"idle"|"loading"|"success"|"error">("idle");
   const [errors, setErrors] = useState<string[]>([]);
   const [pdfVals, setPdfVals] = useState<Record<string,string> | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
@@ -43,17 +44,28 @@ export default function SubmitPanel({ clientId }: Props) {
       if (json.pdf_values) setPdfVals(json.pdf_values);
     } else {
       setStatus("success");
+      setWarnings(json.warnings ?? []);
     }
   };
 
   if (status === "success") {
     return (
-      <div className="bg-[#E8F4EE] border border-[#B3D9C4] rounded-xl px-6 py-5 flex items-center gap-4">
-        <span className="text-3xl">✅</span>
-        <div>
-          <p className="text-sm font-semibold text-[#2E7D5B]">Questionnaire validated and submission recorded</p>
-          <p className="text-xs text-[#4A6572] mt-0.5">All identity fields matched client profile. Submission logged successfully.</p>
+      <div className="space-y-3">
+        <div className="bg-[#E8F4EE] border border-[#B3D9C4] rounded-xl px-6 py-5 flex items-center gap-4">
+          <span className="text-3xl">✅</span>
+          <div>
+            <p className="text-sm font-semibold text-[#2E7D5B]">Questionnaire validated and submission recorded</p>
+            <p className="text-xs text-[#4A6572] mt-0.5">All identity fields matched client profile. Submission logged successfully.</p>
+          </div>
         </div>
+        {warnings.length > 0 && (
+          <div className="bg-[#FFF8EC] border border-[#EBD9A8] rounded-xl px-4 py-3 space-y-1">
+            <p className="text-xs font-semibold text-[#7D6B2E] flex items-center gap-1.5">
+              <span>⚠</span> Accepted with {warnings.length} warning{warnings.length > 1 ? "s" : ""}
+            </p>
+            {warnings.map((w, i) => <p key={i} className="text-xs text-[#7D6B2E] pl-4">• {w}</p>)}
+          </div>
+        )}
       </div>
     );
   }

@@ -2,9 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PDFDocument } from "pdf-lib";
-import { analyseClient, financialPosition, scoreAnswers, goalCalc } from "@/lib/riskEngine";
 import { archivePdf } from "@/lib/documentArchive";
-import type { FinancialFacts, LoanRow, InvestmentRow, RiskAnswer, GoalRow, ClientRow } from "@/lib/riskEngine";
+import { createSnapshot } from "@/lib/snapshot";
 
 export const runtime = "nodejs";
 
@@ -91,8 +90,17 @@ export async function POST(
   if (!cl) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
   const errors: string[] = [];
-  if (cl.client_code && norm(pdf.client_code) !== norm(cl.client_code))
-    errors.push(`UCC mismatch — PDF: "${pdf.client_code}", profile: "${cl.client_code}"`);
+  const warnings: string[] = [];
+  if (cl.client_code) {
+    if (norm(pdf.client_code) !== norm(cl.client_code))
+      errors.push(`UCC mismatch — PDF: "${pdf.client_code}", profile: "${cl.client_code}"`);
+  } else {
+    // Missing client_code used to skip UCC verification with no trace at
+    // all — that's a real identity-check gap, not something to pass over
+    // silently. Doesn't block submission (an old client profile pre-dating
+    // the UCC feature shouldn't be locked out), but it must be visible.
+    warnings.push(`Client profile has no UCC/client code on file — could not verify the PDF's UCC ("${pdf.client_code || "blank"}") against it. Add one in Personal & KYC.`);
+  }
   if (norm(pdf.full_name) !== norm(cl.full_name))
     errors.push(`Full name mismatch — PDF: "${pdf.full_name}", profile: "${cl.full_name}"`);
   if (normPan(pdf.pan) !== normPan(cl.pan))
@@ -413,59 +421,12 @@ export async function POST(
 
   // ── Create a SNAPSHOT from the freshly-loaded data (powers History + Trend) ─
   const isReview = !!(rawField("ucc") || rawField("rv_full_name"));
-  try {
-    const [{ data: freshClient }, { data: freshFacts }, { data: freshAns },
-           { data: freshLoans }, { data: freshInv }, { data: freshGoals }] = await Promise.all([
-      supabase.from("clients").select("*").eq("client_id", id).single(),
-      supabase.from("financial_facts").select("*").eq("client_id", id).maybeSingle(),
-      supabase.from("risk_answers").select("*").eq("client_id", id),
-      supabase.from("loans").select("*").eq("client_id", id),
-      supabase.from("investments").select("*").eq("client_id", id),
-      supabase.from("goals").select("*").eq("client_id", id),
-    ]);
-    if (freshClient) {
-      const ans = (freshAns ?? []) as RiskAnswer[];
-      const sc = scoreAnswers(ans);
-      const an = analyseClient(freshClient as ClientRow, freshFacts as FinancialFacts | null, ans,
-        (freshLoans ?? []) as LoanRow[], (freshInv ?? []) as InvestmentRow[], (freshGoals ?? []) as GoalRow[]);
-      const fpos = financialPosition(freshFacts as FinancialFacts | null,
-        (freshLoans ?? []) as LoanRow[], (freshInv ?? []) as InvestmentRow[]);
-      const yr = new Date().getFullYear();
-      const goalSnap = ((freshGoals ?? []) as GoalRow[]).map(g => {
-        const gc = goalCalc(g, yr);
-        return {
-          name: g.goal_name, target_year: g.target_year, cost_today: g.cost_today,
-          saved: g.saved, monthly_sip: g.monthly_sip,
-          fv: Math.round(gc.fv), projected: Math.round(gc.path), gap: Math.round(gc.gap),
-          extra_sip: Math.round(gc.extraSip),
-          funded_pct: gc.fv > 0 ? Math.min(100, Math.round(gc.path / gc.fv * 100)) : 100,
-        };
-      });
-      await supabase.from("snapshots").insert({
-        client_id: id,
-        snapshot_date: new Date().toISOString(),
-        source_note: isReview ? `Review PDF: ${fileName}` : `Questionnaire PDF: ${fileName}`,
-        capacity_score: sc.cap, tolerance_score: sc.tol, knowledge_score: sc.kn,
-        total_score: sc.cap + sc.tol + sc.kn,
-        final_profile: an.finalProfile, answered_count: sc.answered,
-        income: fpos.income, total_assets: fpos.totalAssets,
-        total_debt: fpos.totalDebt, net_worth: fpos.netWorth,
-        years_to_retirement: an.yearsToRetirement,
-        red_flag_count: an.flags.filter(f => f.state === "bad").length,
-        raw_data: {
-          is_review: isReview,
-          goals: goalSnap,
-          flags: an.flags.filter(f => f.state === "bad").map(f => f.name),
-          expenses_annual: freshFacts?.expenses_annual ?? null,
-          life_cover: freshFacts?.life_cover ?? null,
-          health_cover: freshFacts?.health_cover ?? null,
-          loans_total: ((freshLoans ?? []) as LoanRow[]).reduce((s, l) => s + Number(l.outstanding ?? 0), 0),
-          loaded_sections: loaded,
-        },
-      });
-      loaded.push("snapshot");
-    }
-  } catch { /* snapshot failure must not block submission */ }
+  const snapOk = await createSnapshot(
+    supabase, id,
+    isReview ? `Review PDF: ${fileName}` : `Questionnaire PDF: ${fileName}`,
+    { is_review: isReview, loaded_sections: loaded }
+  );
+  if (snapOk) loaded.push("snapshot");
 
   // Mark link submitted
   await supabase
@@ -488,11 +449,17 @@ export async function POST(
   await supabase.from("client_activity_log").insert({
     client_id:    id,
     event_type:   "questionnaire_submitted",
-    description:  `Questionnaire PDF validated — loaded: ${loaded.length > 0 ? loaded.join(", ") : "no new data fields"}`,
+    description:  `Questionnaire PDF validated — loaded: ${loaded.length > 0 ? loaded.join(", ") : "no new data fields"}` +
+      (warnings.length > 0 ? ` — ${warnings.length} warning(s)` : ""),
     performed_by: user.email,
     notes:        notes || null,
-    metadata:     { file_name: fileName, pdf_values: pdf, loaded },
+    metadata:     { file_name: fileName, pdf_values: pdf, loaded, warnings },
   });
 
-  return NextResponse.json({ ok: true, message: `Questionnaire validated and data loaded: ${loaded.length > 0 ? loaded.join(", ") : "no filled fields detected"}.`, loaded });
+  return NextResponse.json({
+    ok: true,
+    message: `Questionnaire validated and data loaded: ${loaded.length > 0 ? loaded.join(", ") : "no filled fields detected"}.`,
+    loaded,
+    warnings,
+  });
 }

@@ -1,6 +1,7 @@
 // app/api/clients/[id]/override/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createSnapshot } from "@/lib/snapshot";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -44,6 +45,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     performed_by: user.email,
     metadata: { risk_override, rationale: risk_override ? rationale : null },
   });
+
+  // An override changes the governing profile, which is the basis for every
+  // downstream recommendation — worth a History/Trend Analysis point even
+  // though no questionnaire was submitted.
+  await createSnapshot(
+    supabase, id,
+    risk_override ? `Adviser override set: ${risk_override}` : "Adviser override cleared",
+  );
 
   return NextResponse.json({ ok: true });
 }
