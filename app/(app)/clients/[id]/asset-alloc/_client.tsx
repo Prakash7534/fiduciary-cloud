@@ -83,12 +83,13 @@ function PortfolioNudge({ clientId }: { clientId: string }) {
 }
 
 export default function AssetAllocClient({
-  clientId, clientName, plan, savedOverrides, hasGoals,
+  clientId, clientName, plan, savedOverrides, engineAllocation, hasGoals,
 }: {
   clientId: string;
   clientName: string;
   plan: AllocationPlan;
   savedOverrides: Record<string, unknown> | null;
+  engineAllocation: Record<string, number>;
   hasGoals: boolean;
 }) {
   const router = useRouter();
@@ -126,7 +127,18 @@ export default function AssetAllocClient({
     startTransition(() => router.refresh());
   };
 
-  const resetToEngine = () => { setAlloc({ ...plan.assetAllocation }); setMappingMode("bucket"); setSaved(false); };
+  const resetToEngine = () => {
+    setAlloc({ ...engineAllocation });
+    setMappingMode("bucket");
+    setSaved(false);
+    startTransition(async () => {
+      await fetch("/api/clients/" + clientId + "/allocation", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: true }),
+      });
+      router.refresh();
+    });
+  };
 
   const goalSipPct = (b: BucketPlan) =>
     plan.totalMonthlySIP > 0 ? Math.round(b.totalShortfall / plan.totalMonthlySIP * 100) : 0;
@@ -172,7 +184,7 @@ export default function AssetAllocClient({
       <div className="grid grid-cols-4 gap-3">
         {[
           { label: "Total portfolio target", value: fmtL(plan.totalPortfolioValue), sub: "future value of all goals" },
-          { label: "Required monthly SIP",   value: fmtSIP(plan.totalMonthlySIP),   sub: "across all goal buckets" },
+          { label: "Required monthly SIP",   value: fmtSIP(plan.totalMonthlySIP),   sub: "additional, net of current portfolio" },
           { label: "Monthly surplus",        value: fmtSIP(plan.monthlySurplus),    sub: "income minus expenses" },
           { label: "Surplus after SIP", value: fmtSIP(Math.abs(plan.surplusAfterSIP)),
             sub: plan.surplusAfterSIP >= 0 ? "buffer remaining" : "monthly shortfall", red: plan.surplusAfterSIP < 0 },

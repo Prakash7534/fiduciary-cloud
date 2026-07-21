@@ -9,9 +9,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const body = await req.json();
 
+  // { reset: true } clears the override so the client reverts to the engine SAA.
+  const value = body && body.reset ? null : body;
   const { error } = await supabase
     .from("clients")
-    .update({ allocation_overrides: body })
+    .update({ allocation_overrides: value })
     .eq("client_id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

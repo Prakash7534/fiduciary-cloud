@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { profileFromAnswers } from "@/lib/riskEngine";
 import type { RiskAnswer } from "@/lib/riskEngine";
-import { buildAllocationPlan, type UniverseRow, type GoalInput } from "@/lib/allocationEngine";
+import { buildAllocationPlan, BASE_ALLOCATION, type UniverseRow, type GoalInput } from "@/lib/allocationEngine";
+import { totalRequiredSip } from "@/lib/goalSip";
+import type { GoalRow } from "@/lib/riskEngine";
 import PortfolioClient from "./_client";
 import { resolveAssumptions } from "@/lib/assumptions";
 
@@ -63,6 +65,12 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
   const universeRows = (universe ?? []) as UniverseRow[];
   const plan = buildAllocationPlan(saaProfile, goals, universeRows, monthlySurplus, overrideAlloc ?? undefined, A);
   plan.profile = activeProfile; // display the client-facing profile name, not the SAA key
+
+  // Reconcile the goal SIP with the Goal Calculator / Asset Allocation (shared
+  // live-portfolio-aware, SAA-blended calculation — lib/goalSip.ts).
+  const saaMap = overrideAlloc ?? BASE_ALLOCATION[saaProfile] ?? {};
+  plan.totalMonthlySIP = totalRequiredSip(goals as unknown as GoalRow[], (positions ?? []) as Record<string, unknown>[], (holdings ?? []) as Record<string, unknown>[], saaMap, A);
+  plan.surplusAfterSIP = Math.round(plan.monthlySurplus - plan.totalMonthlySIP);
 
   return (
     <PortfolioClient
