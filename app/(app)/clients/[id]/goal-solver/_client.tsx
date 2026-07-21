@@ -65,7 +65,7 @@ function FundingArc({ pct }: { pct: number }) {
   );
 }
 
-export default function GoalSolverClient({ goals, monthlySurplus }: { goals: GoalRow[]; monthlySurplus: number }) {
+export default function GoalSolverClient({ goals, monthlySurplus, assumeInflation = 6, assumeReturn = 10 }: { goals: GoalRow[]; monthlySurplus: number; assumeInflation?: number; assumeReturn?: number }) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [overrides, setOverrides] = useState<Record<number, Partial<{ cost_today: number; saved: number; monthly_sip: number; target_year: number; inflation_pct: number; return_pct: number }>>>({});
 
@@ -84,8 +84,8 @@ export default function GoalSolverClient({ goals, monthlySurplus }: { goals: Goa
     saved:         ov.saved         ?? Number(g.saved         ?? 0),
     monthly_sip:   ov.monthly_sip   ?? Number(g.monthly_sip   ?? 0),
     target_year:   ov.target_year   ?? Number(g.target_year   ?? THIS_YEAR + 10),
-    inflation_pct: ov.inflation_pct ?? Number(g.inflation_pct ?? 6),
-    return_pct:    ov.return_pct    ?? Number(g.return_pct    ?? 10),
+    inflation_pct: ov.inflation_pct ?? Number(g.inflation_pct ?? assumeInflation),
+    return_pct:    ov.return_pct    ?? Number(g.return_pct    ?? assumeReturn),
   };
   const calc = goalCalc(params);
   const fundedPct = calc.fv > 0 ? (calc.path / calc.fv) * 100 : 100;

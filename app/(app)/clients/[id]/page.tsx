@@ -8,6 +8,7 @@ import {
 } from "@/lib/riskEngine";
 import ScoreChart from "./_components/ScoreChart";
 import OverrideSelector from "./_components/OverrideSelector";
+import { resolveAssumptions } from "@/lib/assumptions";
 
 // Score → band label (total 19-95 scale)
 function totalBand(total: number): string {
@@ -35,9 +36,12 @@ const fmt = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigi
 export default async function RiskProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  const authUser = (await supabase.auth.getUser()).data.user;
 
   const { data: client } = await supabase.from("clients").select("*").eq("client_id", id).maybeSingle();
   if (!client) notFound();
+  const { data: firm } = await supabase.from("firm_settings").select("*").eq("user_id", authUser?.id ?? "").maybeSingle();
+  const A = resolveAssumptions(firm as Record<string, unknown> | null);
 
   const [{ data: facts }, { data: answers }, { data: loans }, { data: invs }, { data: goals }] = await Promise.all([
     supabase.from("financial_facts").select("*").eq("client_id", id).maybeSingle(),
@@ -53,6 +57,7 @@ export default async function RiskProfilePage({ params }: { params: Promise<{ id
     (loans ?? []) as LoanRow[],
     (invs ?? []) as InvestmentRow[],
     (goals ?? []) as GoalRow[],
+    A,
   );
 
   const capPct  = a.cap / 40;

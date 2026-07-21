@@ -7,6 +7,7 @@ import { BASE_ALLOCATION } from "@/lib/allocationEngine";
 import { buildGapPlan, currentValueByClass } from "@/lib/constructionEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import AdvisoryReportClient from "./_client";
+import { resolveAssumptions } from "@/lib/assumptions";
 
 const THIS_YEAR = new Date().getFullYear();
 
@@ -51,13 +52,14 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
   ]);
 
   if (error || !client) notFound();
+  const A = resolveAssumptions(firm as Record<string, unknown> | null);
 
   const answers = (answersRaw ?? []) as RiskAnswer[];
   const { cap, tol, kn, answered } = scoreAnswers(answers);
   const total = cap + tol + kn;
 
   const analysis = analyseClient(client, facts as FinancialFacts | null, answers,
-    (loans ?? []) as LoanRow[], (investments ?? []) as InvestmentRow[], (goalsRaw ?? []) as GoalRow[]);
+    (loans ?? []) as LoanRow[], (investments ?? []) as InvestmentRow[], (goalsRaw ?? []) as GoalRow[], A);
   const fp = financialPosition(facts as FinancialFacts | null, (loans ?? []) as LoanRow[], (investments ?? []) as InvestmentRow[]);
 
   // Active profile (respects adviser override)
@@ -119,17 +121,17 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
     current_value: (h.current_value as number | null) ?? null, lumpsum_invested: (h.lumpsum_invested as number | null) ?? null,
     monthly_sip: (h.monthly_sip as number | null) ?? null, added_at: (h.added_at as string | null) ?? null,
   }));
-  const liveByGoal = computeGoalLiveAmounts(goals, posForNetting, holdForNetting, THIS_YEAR);
+  const liveByGoal = computeGoalLiveAmounts(goals, posForNetting, holdForNetting, THIS_YEAR, A);
 
   const goalRows = goals.map(g => {
     const { liveSaved, liveSip } = liveByGoal[g.goal_id] ?? { liveSaved: 0, liveSip: 0 };
     const gLive = { ...g, saved: (g.saved ?? 0) + liveSaved, monthly_sip: (g.monthly_sip ?? 0) + liveSip };
-    const c = goalCalc(gLive, THIS_YEAR);
-    const r = (g.return_pct ?? 10) / 100;
+    const c = goalCalc(gLive, THIS_YEAR, A);
+    const r = (g.return_pct ?? A.defaultGoalReturn) / 100;
     const lumpsumNow = c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
     return {
       goal_name: g.goal_name, target_year: g.target_year, cost_today: g.cost_today,
-      priority: g.priority, inflation_pct: g.inflation_pct ?? 6, return_pct: g.return_pct ?? 10,
+      priority: g.priority, inflation_pct: g.inflation_pct ?? A.inflation, return_pct: g.return_pct ?? A.defaultGoalReturn,
       years: c.years, fv: Math.round(c.fv), projected: Math.round(c.path), gap: Math.round(c.gap),
       extraSip: Math.round(c.extraSip), lumpsumNow: Math.round(lumpsumNow),
       liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip),

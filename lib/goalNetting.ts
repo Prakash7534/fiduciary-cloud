@@ -1,4 +1,5 @@
 // lib/goalNetting.ts
+import { type Assumptions, DEFAULT_ASSUMPTIONS } from "./assumptions";
 // Time-aware netting for goal "saved"/"monthly_sip" figures (Fix #6), mirroring
 // the investments.declared_at pattern used elsewhere (Live Assets, Advisory
 // Report asset reconciliation): platform-executed money that predates a
@@ -58,7 +59,8 @@ export function computeGoalLiveAmounts(
   goals: GoalForNetting[],
   positions: PositionForNetting[],
   holdings: HoldingForNetting[],
-  thisYear: number
+  thisYear: number,
+  a: Assumptions = DEFAULT_ASSUMPTIONS
 ): Record<string, GoalLiveAmounts> {
   const execPos = positions.filter(p => p.status === "executed");
 
@@ -98,7 +100,7 @@ export function computeGoalLiveAmounts(
   });
 
   const fvWeights = goals.map(g =>
-    (g.cost_today ?? 0) * Math.pow(1 + (g.inflation_pct ?? 6) / 100, Math.max(0, (g.target_year ?? thisYear) - thisYear))
+    (g.cost_today ?? 0) * Math.pow(1 + (g.inflation_pct ?? a.inflation) / 100, Math.max(0, (g.target_year ?? thisYear) - thisYear))
   );
   const fvTotal = fvWeights.reduce((s, v) => s + v, 0);
 

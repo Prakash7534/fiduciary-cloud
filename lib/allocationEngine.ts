@@ -2,6 +2,8 @@
 // Combines risk profile (SAA) with goal time horizons to produce
 // an instrument-level allocation plan with per-goal SIP mapping.
 
+import { type Assumptions, DEFAULT_ASSUMPTIONS, bucketReturn } from "./assumptions";
+
 export type GoalBucket = "short" | "medium" | "long";
 
 export interface UniverseRow {
@@ -140,7 +142,8 @@ export function buildAllocationPlan(
   goals: GoalInput[],
   universe: UniverseRow[],
   monthlySurplus: number,
-  overrides?: Record<string, number> // asset class % overrides
+  overrides?: Record<string, number>, // asset class % overrides
+  a: Assumptions = DEFAULT_ASSUMPTIONS
 ): AllocationPlan {
 
   // 1. Base SAA
@@ -190,8 +193,8 @@ export function buildAllocationPlan(
 
     for (const g of bGoals) {
       const years   = Math.max(1, (g.target_year ?? THIS_YEAR + 5) - THIS_YEAR);
-      const infl    = g.inflation_pct ?? 6;
-      const ret     = g.return_pct ?? (bucket === "short" ? 7 : bucket === "medium" ? 10 : 13);
+      const infl    = g.inflation_pct ?? a.inflation;
+      const ret     = g.return_pct ?? bucketReturn(bucket, a);
       const fv      = futureValue(g.cost_today ?? 0, years, infl);
       const sip     = sipRequired(fv, g.saved ?? 0, years, ret);
       bucketRequired += fv;
@@ -228,8 +231,8 @@ export function buildAllocationPlan(
     // Build goal mappings for this bucket
     for (const g of bGoals) {
       const years  = Math.max(1, (g.target_year ?? THIS_YEAR + 5) - THIS_YEAR);
-      const infl   = g.inflation_pct ?? 6;
-      const ret    = g.return_pct ?? (bucket === "short" ? 7 : bucket === "medium" ? 10 : 13);
+      const infl   = g.inflation_pct ?? a.inflation;
+      const ret    = g.return_pct ?? bucketReturn(bucket, a);
       const fv     = futureValue(g.cost_today ?? 0, years, infl);
       const sip    = sipRequired(fv, g.saved ?? 0, years, ret);
 

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { goalCalc, type GoalRow } from "@/lib/riskEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
+import { resolveAssumptions } from "@/lib/assumptions";
 
 const THIS_YEAR = new Date().getFullYear();
 
@@ -24,6 +25,7 @@ function ProgressBar({ pct, color = "#175A69" }: { pct: number; color?: string }
 export default async function GoalCalculatorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  const authUser = (await supabase.auth.getUser()).data.user;
 
   const [{ data: client, error }, { data: goalsRaw }, { data: facts }, { data: positions }, { data: holdings }] = await Promise.all([
     supabase.from("clients").select("full_name, dob").eq("client_id", id).single(),
@@ -34,6 +36,8 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   ]);
 
   if (error || !client) notFound();
+  const { data: firm } = await supabase.from("firm_settings").select("*").eq("user_id", authUser?.id ?? "").maybeSingle();
+  const A = resolveAssumptions(firm as Record<string, unknown> | null);
 
   const goals = (goalsRaw ?? []) as GoalRow[];
   const income = ((facts?.income_self ?? 0) + (facts?.income_spouse ?? 0) + (facts?.income_other ?? 0)) / 12;
@@ -52,7 +56,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     current_value: h.current_value as number | null, lumpsum_invested: h.lumpsum_invested as number | null,
     monthly_sip: h.monthly_sip as number | null, added_at: h.added_at as string | null,
   }));
-  const liveByGoal = computeGoalLiveAmounts(goals, posForNetting, holdForNetting, THIS_YEAR);
+  const liveByGoal = computeGoalLiveAmounts(goals, posForNetting, holdForNetting, THIS_YEAR, A);
   const totalLiveValue = Object.values(liveByGoal).reduce((s, v) => s + v.liveSaved, 0);
   const totalLiveSip   = Object.values(liveByGoal).reduce((s, v) => s + v.liveSip, 0);
 
@@ -63,8 +67,8 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
       saved:       (g.saved ?? 0) + liveSaved,
       monthly_sip: (g.monthly_sip ?? 0) + liveSip,
     };
-    const c = goalCalc(gLive, THIS_YEAR);
-    const r = (g.return_pct ?? 10) / 100;
+    const c = goalCalc(gLive, THIS_YEAR, A);
+    const r = (g.return_pct ?? A.defaultGoalReturn) / 100;
     const lumpsumNow = c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
     return { g: gLive, c, lumpsumNow: Math.round(lumpsumNow), liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip) };
   });
@@ -154,7 +158,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
                     <div className="font-semibold text-[#0F3A46]">{fmtCr(g.cost_today ?? 0)}</div>
                   </div>
                   <div className="bg-[#F5F9FA] rounded-lg p-3">
-                    <div className="text-xs text-[#6B7E86] mb-1">Future cost ({g.inflation_pct ?? 6}% p.a.)</div>
+                    <div className="text-xs text-[#6B7E86] mb-1">Future cost ({g.inflation_pct ?? A.inflation}% p.a.)</div>
                     <div className="font-semibold text-[#0F3A46]">{fmtCr(c.fv)}</div>
                   </div>
                   <div className="bg-[#F5F9FA] rounded-lg p-3">
@@ -184,7 +188,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
                       <span className="text-xs text-[#6B7E86]">OR lumpsum today: </span>
                       <span className="text-sm font-bold text-[#8A6D1C]">{fmtCr(lumpsumNow)}</span>
                     </div>
-                    <div className="text-xs text-[#6B7E86]">@ {g.return_pct ?? 10}% p.a.</div>
+                    <div className="text-xs text-[#6B7E86]">@ {g.return_pct ?? A.defaultGoalReturn}% p.a.</div>
                   </div>
                 )}
                 {c.gap === 0 && (

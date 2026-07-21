@@ -10,6 +10,7 @@ import {
   analyseClient, scoreAnswers, financialPosition,
   type RiskAnswer, type FinancialFacts, type LoanRow, type InvestmentRow, type GoalRow,
 } from "@/lib/riskEngine";
+import { resolveAssumptions } from "@/lib/assumptions";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -102,6 +103,8 @@ export async function POST(req: NextRequest) {
   if (kg.length) await supabase.from("knowledge_grid").insert(kg.map((r) => ({ client_id: clientId, ...r })));
 
   // ---- compute snapshot metrics ----
+  const { data: firmRow } = await supabase.from("firm_settings").select("*").eq("user_id", user.id).maybeSingle();
+  const A = resolveAssumptions(firmRow as Record<string, unknown> | null);
   const { cap, tol, kn } = scoreAnswers(answers as RiskAnswer[]);
   const total = cap + tol + kn;
   const fp = financialPosition(
@@ -115,7 +118,8 @@ export async function POST(req: NextRequest) {
     answers as RiskAnswer[],
     loans as LoanRow[],
     invs as InvestmentRow[],
-    goals as unknown as GoalRow[]
+    goals as unknown as GoalRow[],
+    A
   );
 
   await supabase.from("snapshots").insert({

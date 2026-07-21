@@ -4,10 +4,12 @@ import { profileFromAnswers } from "@/lib/riskEngine";
 import type { RiskAnswer } from "@/lib/riskEngine";
 import { buildAllocationPlan, type UniverseRow, type GoalInput } from "@/lib/allocationEngine";
 import PortfolioClient from "./_client";
+import { resolveAssumptions } from "@/lib/assumptions";
 
 export default async function PortfolioPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  const authUser = (await supabase.auth.getUser()).data.user;
 
   const [
     { data: client, error },
@@ -32,6 +34,8 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
   ]);
 
   if (error || !client) notFound();
+  const { data: firm } = await supabase.from("firm_settings").select("*").eq("user_id", authUser?.id ?? "").maybeSingle();
+  const A = resolveAssumptions(firm as Record<string, unknown> | null);
 
   const answers: RiskAnswer[] = (answersRaw ?? []).map(r => ({
     question_num: r.question_num as number,
@@ -57,7 +61,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
 
   const goals = (goalsRaw ?? []) as GoalInput[];
   const universeRows = (universe ?? []) as UniverseRow[];
-  const plan = buildAllocationPlan(saaProfile, goals, universeRows, monthlySurplus, overrideAlloc ?? undefined);
+  const plan = buildAllocationPlan(saaProfile, goals, universeRows, monthlySurplus, overrideAlloc ?? undefined, A);
   plan.profile = activeProfile; // display the client-facing profile name, not the SAA key
 
   return (

@@ -2,9 +2,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { analyseClient, type RiskAnswer, type LoanRow, type InvestmentRow, type GoalRow } from "@/lib/riskEngine";
+import { resolveAssumptions } from "@/lib/assumptions";
 
 export default async function ClientsPage() {
   const supabase = await createClient();
+  const authUser = (await supabase.auth.getUser()).data.user;
+  const { data: firm } = await supabase.from("firm_settings").select("*").eq("user_id", authUser?.id ?? "").maybeSingle();
+  const A = resolveAssumptions(firm as Record<string, unknown> | null);
   const { data: clients } = await supabase
     .from("clients")
     .select("client_id, full_name, dob, client_code, updated_at")
@@ -21,7 +25,7 @@ export default async function ClientsPage() {
       ]);
       const a = analyseClient(
         c, facts ?? null, (answers ?? []) as RiskAnswer[],
-        (loans ?? []) as LoanRow[], (invs ?? []) as InvestmentRow[], (goals ?? []) as GoalRow[]
+        (loans ?? []) as LoanRow[], (invs ?? []) as InvestmentRow[], (goals ?? []) as GoalRow[], A
       );
       const badFlags = a.flags.filter((f) => f.state === "bad").length;
       return { client: c, profile: a.finalProfile, answered: a.answered, badFlags };

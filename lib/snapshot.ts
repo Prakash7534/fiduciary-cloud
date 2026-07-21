@@ -6,6 +6,7 @@
 // recommendation/position actually being executed into the live portfolio.
 // Any route can now call createSnapshot() after such an event.
 import { analyseClient, financialPosition, scoreAnswers, goalCalc } from "@/lib/riskEngine";
+import { resolveAssumptions } from "@/lib/assumptions";
 import type { FinancialFacts, LoanRow, InvestmentRow, RiskAnswer, GoalRow, ClientRow } from "@/lib/riskEngine";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -27,15 +28,20 @@ export async function createSnapshot(
     ]);
     if (!freshClient) return false;
 
+    // Master planning assumptions for this client's adviser
+    const { data: firmRow } = await supabase.from("firm_settings")
+      .select("*").eq("user_id", (freshClient as { user_id?: string }).user_id ?? "").maybeSingle();
+    const A = resolveAssumptions(firmRow as Record<string, unknown> | null);
+
     const ans = (freshAns ?? []) as RiskAnswer[];
     const sc = scoreAnswers(ans);
     const an = analyseClient(freshClient as ClientRow, freshFacts as FinancialFacts | null, ans,
-      (freshLoans ?? []) as LoanRow[], (freshInv ?? []) as InvestmentRow[], (freshGoals ?? []) as GoalRow[]);
+      (freshLoans ?? []) as LoanRow[], (freshInv ?? []) as InvestmentRow[], (freshGoals ?? []) as GoalRow[], A);
     const fpos = financialPosition(freshFacts as FinancialFacts | null,
       (freshLoans ?? []) as LoanRow[], (freshInv ?? []) as InvestmentRow[]);
     const yr = new Date().getFullYear();
     const goalSnap = ((freshGoals ?? []) as GoalRow[]).map(g => {
-      const gc = goalCalc(g, yr);
+      const gc = goalCalc(g, yr, A);
       return {
         name: g.goal_name, target_year: g.target_year, cost_today: g.cost_today,
         saved: g.saved, monthly_sip: g.monthly_sip,

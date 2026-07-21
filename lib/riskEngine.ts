@@ -1,4 +1,5 @@
 // lib/riskEngine.ts
+import { type Assumptions, DEFAULT_ASSUMPTIONS } from "./assumptions";
 // -----------------------------------------------------------------------------
 // Faithful TypeScript port of the Python risk_engine.py. Takes plain data
 // (already fetched from Supabase — this file has no DB calls of its own) and
@@ -74,10 +75,10 @@ export interface GoalRow {
   declared_at?: string | null;
 }
 
-export function goalCalc(g: GoalRow, thisYear = new Date().getFullYear()) {
+export function goalCalc(g: GoalRow, thisYear = new Date().getFullYear(), a: Assumptions = DEFAULT_ASSUMPTIONS) {
   const years = Math.max(0, (g.target_year ?? thisYear) - thisYear);
-  const r = (g.return_pct ?? 10) / 100;
-  const infl = (g.inflation_pct ?? 6) / 100;
+  const r = (g.return_pct ?? a.defaultGoalReturn) / 100;
+  const infl = (g.inflation_pct ?? a.inflation) / 100;
   const n = years * 12;
   const rm = r / 12;
   const fv = (g.cost_today ?? 0) * Math.pow(1 + infl, years);
@@ -164,7 +165,8 @@ export function analyseClient(
   answers: RiskAnswer[],
   loans: LoanRow[],
   investments: InvestmentRow[],
-  goals: GoalRow[]
+  goals: GoalRow[],
+  a: Assumptions = DEFAULT_ASSUMPTIONS
 ): AnalysisResult {
   const { cap, tol, kn, answered } = scoreAnswers(answers);
   const total = cap + tol + kn;
@@ -192,7 +194,7 @@ export function analyseClient(
   const totalAssets = investmentAssetsRaw + propertyAssetsRaw + epfNpsRaw;
   const income = (facts?.income_self ?? 0) + (facts?.income_spouse ?? 0) + (facts?.income_other ?? 0);
 
-  const goalsCalc = goals.map((g) => ({ ...g, ...goalCalc(g) }));
+  const goalsCalc = goals.map((g) => ({ ...g, ...goalCalc(g, new Date().getFullYear(), a) }));
   const extraSipTotal = goalsCalc.reduce((s, g) => s + g.extraSip, 0);
 
   const answerFor = (q: number) => answers.find((a) => a.question_num === q)?.answer ?? null;

@@ -10,6 +10,7 @@ import { buildGapPlan, currentValueByClass } from "@/lib/constructionEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import { buildAdvisoryAssist, type AdvisoryAssistInput } from "@/lib/advisoryNotes";
 import AdvisoryNotesClient from "./_client";
+import { resolveAssumptions } from "@/lib/assumptions";
 
 const THIS_YEAR = new Date().getFullYear();
 const PROFILE_TO_SAA: Record<string, string> = {
@@ -20,6 +21,7 @@ const PROFILE_TO_SAA: Record<string, string> = {
 export default async function AdvisoryNotesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+  const authUser = (await supabase.auth.getUser()).data.user;
 
   const [
     { data: client, error },
@@ -46,11 +48,13 @@ export default async function AdvisoryNotesPage({ params }: { params: Promise<{ 
   ]);
 
   if (error || !client) notFound();
+  const { data: firm } = await supabase.from("firm_settings").select("*").eq("user_id", authUser?.id ?? "").maybeSingle();
+  const A = resolveAssumptions(firm as Record<string, unknown> | null);
 
   const answers = (answersRaw ?? []) as RiskAnswer[];
   const { cap, tol, kn, answered } = scoreAnswers(answers);
   const analysis = analyseClient(client, facts as FinancialFacts | null, answers,
-    (loans ?? []) as LoanRow[], (investments ?? []) as InvestmentRow[], (goalsRaw ?? []) as GoalRow[]);
+    (loans ?? []) as LoanRow[], (investments ?? []) as InvestmentRow[], (goalsRaw ?? []) as GoalRow[], A);
   const fp = financialPosition(facts as FinancialFacts | null, (loans ?? []) as LoanRow[], (investments ?? []) as InvestmentRow[]);
 
   const activeProfile = (client.risk_override as string | null) ?? analysis.finalProfile;
@@ -87,12 +91,12 @@ export default async function AdvisoryNotesPage({ params }: { params: Promise<{ 
     current_value: (h.current_value as number | null) ?? null, lumpsum_invested: (h.lumpsum_invested as number | null) ?? null,
     monthly_sip: (h.monthly_sip as number | null) ?? null, added_at: (h.added_at as string | null) ?? null,
   }));
-  const live = computeGoalLiveAmounts(goals, posNet, holdNet, THIS_YEAR);
+  const live = computeGoalLiveAmounts(goals, posNet, holdNet, THIS_YEAR, A);
   let totalExtraSip = 0, totalLumpsumNow = 0;
   const goalItems = goals.map(g => {
     const l = live[g.goal_id] ?? { liveSaved: 0, liveSip: 0 };
     const gLive = { ...g, saved: (g.saved ?? 0) + l.liveSaved, monthly_sip: (g.monthly_sip ?? 0) + l.liveSip };
-    const c = goalCalc(gLive, THIS_YEAR);
+    const c = goalCalc(gLive, THIS_YEAR, A);
     const r = (g.return_pct ?? 10) / 100;
     totalExtraSip += c.extraSip;
     totalLumpsumNow += c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
