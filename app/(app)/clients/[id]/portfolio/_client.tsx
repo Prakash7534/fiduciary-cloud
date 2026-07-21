@@ -432,6 +432,7 @@ export default function PortfolioClient({
   // ── New investment (gap-based construction) ────────────────────────────────
   const [newLump, setNewLump] = useState(0);
   const [newSipAmt, setNewSipAmt] = useState(0);
+  const [saaSipTotal, setSaaSipTotal] = useState<number>(Math.round(plan.totalMonthlySIP));
   const [showAddHolding, setShowAddHolding] = useState(false);
   const [swapTarget, setSwapTarget] = useState<number | null>(null);
   const [saving, setSaving] = useState(false); const [saved, setSaved] = useState(false);
@@ -666,6 +667,80 @@ export default function PortfolioClient({
       {/* ── CONSTRUCTION TAB ───────────────────────────────────────────────── */}
       {mainTab === "construction" && (
         <>
+          {/* ── Required SIP by asset class (SAA target) ──────────────────── */}
+          <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#E7EFEF] bg-[#175A69] flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-white">Required SIP by asset class — SAA target</h2>
+                <p className="text-[10px] text-[#A9CDD4] mt-0.5">The required monthly SIP split across asset classes in proportion to the {plan.profile} strategic allocation — i.e. how much SIP to propose in each class.</p>
+              </div>
+              <div className="flex items-end gap-2">
+                <div>
+                  <label className="block text-[10px] text-[#A9CDD4] mb-0.5">Total monthly SIP (Rs./mo)</label>
+                  <input type="number" min={0} value={saaSipTotal || ""} onChange={e => setSaaSipTotal(Number(e.target.value) || 0)}
+                    className="w-32 px-2 py-1.5 rounded-lg text-sm text-[#0F3A46] bg-white border border-[#CBD9DC] outline-none" />
+                </div>
+                <button onClick={() => setSaaSipTotal(Math.round(plan.totalMonthlySIP))}
+                  className="px-2.5 py-1.5 text-[10px] border border-[#A9CDD4] text-white rounded-lg hover:bg-[#0F3A46]"
+                  title="Use the SIP the goal engine calculated as required">
+                  = goal SIP ({fmtMo(plan.totalMonthlySIP)})
+                </button>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-[#6B7E86] border-b border-[#E7EFEF] bg-[#FAFCFC]">
+                  <th className="text-left px-4 py-2 font-medium">Asset class</th>
+                  <th className="text-right px-2 py-2 font-medium">SAA target</th>
+                  <th className="text-right px-2 py-2 font-medium">Current %</th>
+                  <th className="text-right px-4 py-2 font-medium">Monthly SIP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(plan.assetAllocation)
+                  .filter(([, pct]) => pct > 0)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([ac, pct]) => {
+                    const cls = gapPlan.classes.find(c => c.assetClass === ac);
+                    const curPct = cls && gapPlan.totalCurrent > 0 ? cls.currentPct : null;
+                    return (
+                      <tr key={ac} className="border-b border-[#E7EFEF]">
+                        <td className="px-4 py-2">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full" style={{ background: AC_COLOR[ac] ?? "#999" }} />
+                            <span className="font-medium text-[#0F3A46] text-xs">{ac}</span>
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-right text-xs font-semibold text-[#0F3A46]">{pct}%</td>
+                        <td className="px-2 py-2 text-right text-xs">
+                          {curPct == null ? <span className="text-[#6B7E86]">—</span> :
+                            <span className={Math.abs(curPct - pct) <= 2 ? "text-[#2E7D5B]" : "text-[#B4463C]"}>{curPct.toFixed(1)}%</span>}
+                        </td>
+                        <td className="px-4 py-2 text-right text-xs font-semibold text-[#175A69]">{fmtMo(Math.round(saaSipTotal * pct / 100))}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-[#F5F9FA] font-semibold">
+                  <td className="px-4 py-2 text-xs text-[#0F3A46]">Total</td>
+                  <td className="px-2 py-2 text-right text-xs text-[#0F3A46]">{Object.values(plan.assetAllocation).reduce((a, b) => a + b, 0)}%</td>
+                  <td className="px-2 py-2"></td>
+                  <td className="px-4 py-2 text-right text-xs text-[#0F3A46]">{fmtMo(saaSipTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <div className="px-5 py-3 bg-[#F5F9FA] flex items-center justify-between flex-wrap gap-2">
+              <p className="text-[10px] text-[#6B7E86]">
+                This is the straight SAA-target split of the required SIP. Step 1 below then <strong>gap-adjusts</strong> it for what the client already holds (steering more into underweight classes first).
+              </p>
+              <button onClick={() => setNewSipAmt(saaSipTotal)}
+                className="px-4 py-2 text-sm bg-[#0F3A46] text-white font-medium rounded-lg hover:bg-[#175A69]">
+                Use in gap analysis ↓
+              </button>
+            </div>
+          </div>
+
           {/* ── STEP 1 · New investment + gap analysis ─────────────────────── */}
           <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-[#E7EFEF] bg-[#0F3A46] flex items-center justify-between flex-wrap gap-2">
