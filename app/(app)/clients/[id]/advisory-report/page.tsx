@@ -5,6 +5,7 @@ import { analyseClient, financialPosition, scoreAnswers, yearsBetween, goalCalc 
 import type { FinancialFacts, LoanRow, InvestmentRow, RiskAnswer, GoalRow } from "@/lib/riskEngine";
 import { BASE_ALLOCATION } from "@/lib/allocationEngine";
 import { buildGapPlan, currentValueByClass } from "@/lib/constructionEngine";
+import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import AdvisoryReportClient from "./_client";
 
 const THIS_YEAR = new Date().getFullYear();
@@ -106,32 +107,22 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
   const assetOverlap = Object.keys(declaredByClass).reduce(
     (s, ac) => s + Math.min(declaredByClass[ac] ?? 0, holdOnlyByClass[ac] ?? 0), 0);
 
-  // ── Goals with live-portfolio dynamics (same logic as Goal Calculator) ────
+  // ── Goals with live-portfolio dynamics (same logic as Goal Calculator,
+  //     netted against each goal's own declared_at — see lib/goalNetting.ts) ──
   const goals = (goalsRaw ?? []) as GoalRow[];
-  const execPos = (positions ?? []).filter(p => p.status === "executed");
-  const posValue = (p: { current_value: unknown; executed_lumpsum: unknown }) =>
-    Number(p.current_value ?? 0) > 0 ? Number(p.current_value) : Number(p.executed_lumpsum ?? 0);
+  const posForNetting = (positions ?? []).map((p: Record<string, unknown>) => ({
+    goal_id: (p.goal_id as string | null) ?? null, status: (p.status as string | null) ?? null,
+    executed_lumpsum: (p.executed_lumpsum as number | null) ?? null, executed_sip: (p.executed_sip as number | null) ?? null,
+    current_value: (p.current_value as number | null) ?? null, executed_at: (p.executed_at as string | null) ?? null,
+  }));
+  const holdForNetting = (holdings ?? []).map((h: Record<string, unknown>) => ({
+    current_value: (h.current_value as number | null) ?? null, lumpsum_invested: (h.lumpsum_invested as number | null) ?? null,
+    monthly_sip: (h.monthly_sip as number | null) ?? null, added_at: (h.added_at as string | null) ?? null,
+  }));
+  const liveByGoal = computeGoalLiveAmounts(goals, posForNetting, holdForNetting, THIS_YEAR);
 
-  const linkedValue: Record<string, number> = {}; const linkedSip: Record<string, number> = {};
-  let unlinkedValue = 0, unlinkedSip = 0;
-  execPos.forEach(p => {
-    const v = posValue(p); const s = Number(p.executed_sip ?? 0);
-    if (p.goal_id) {
-      linkedValue[p.goal_id as string] = (linkedValue[p.goal_id as string] ?? 0) + v;
-      linkedSip[p.goal_id as string] = (linkedSip[p.goal_id as string] ?? 0) + s;
-    } else { unlinkedValue += v; unlinkedSip += s; }
-  });
-  (holdings ?? []).forEach(h => {
-    unlinkedValue += Number(h.current_value ?? 0) > 0 ? Number(h.current_value) : Number(h.lumpsum_invested ?? 0);
-    unlinkedSip += Number(h.monthly_sip ?? 0);
-  });
-  const fvWeights = goals.map(g => (g.cost_today ?? 0) * Math.pow(1 + (g.inflation_pct ?? 6) / 100, Math.max(0, (g.target_year ?? THIS_YEAR) - THIS_YEAR)));
-  const fvTotal = fvWeights.reduce((s, v) => s + v, 0);
-
-  const goalRows = goals.map((g, gi) => {
-    const share = fvTotal > 0 ? fvWeights[gi] / fvTotal : (goals.length ? 1 / goals.length : 0);
-    const liveSaved = (linkedValue[g.goal_id] ?? 0) + unlinkedValue * share;
-    const liveSip   = (linkedSip[g.goal_id] ?? 0) + unlinkedSip * share;
+  const goalRows = goals.map(g => {
+    const { liveSaved, liveSip } = liveByGoal[g.goal_id] ?? { liveSaved: 0, liveSip: 0 };
     const gLive = { ...g, saved: (g.saved ?? 0) + liveSaved, monthly_sip: (g.monthly_sip ?? 0) + liveSip };
     const c = goalCalc(gLive, THIS_YEAR);
     const r = (g.return_pct ?? 10) / 100;
@@ -208,6 +199,9 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
       engineProfile: analysis.finalProfile,
       activeProfile,
       isOverridden: !!client.risk_override,
+      overrideRationale: (client.risk_override_rationale as string | null) ?? null,
+      overrideBy: (client.risk_override_by as string | null) ?? null,
+      overrideAt: (client.risk_override_at as string | null) ?? null,
       capR: analysis.capR, tolR: analysis.tolR, govR: analysis.govR,
       yearsToRetirement: analysis.yearsToRetirement,
       flags: analysis.flags.filter(f => f.state === "bad").map(f => ({ name: f.name, val: f.val, why: f.why })),

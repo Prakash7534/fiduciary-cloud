@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { goalCalc, type GoalRow } from "@/lib/riskEngine";
+import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 
 const THIS_YEAR = new Date().getFullYear();
 
@@ -28,8 +29,8 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     supabase.from("clients").select("full_name, dob").eq("client_id", id).single(),
     supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
     supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
-    supabase.from("portfolio_positions").select("goal_id, status, executed_lumpsum, executed_sip, current_value").eq("client_id", id),
-    supabase.from("portfolio_holdings").select("current_value, lumpsum_invested, monthly_sip").eq("client_id", id),
+    supabase.from("portfolio_positions").select("goal_id, status, executed_lumpsum, executed_sip, current_value, executed_at").eq("client_id", id),
+    supabase.from("portfolio_holdings").select("current_value, lumpsum_invested, monthly_sip, added_at").eq("client_id", id),
   ]);
 
   if (error || !client) notFound();
@@ -39,38 +40,24 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   const expenses = (facts?.expenses_annual ?? 0) / 12;
   const surplus = income - expenses;
 
-  // ── Live portfolio values ──────────────────────────────────────────────────
-  const execPos = (positions ?? []).filter(p => p.status === "executed");
-  const posValue = (p: { current_value: number | null; executed_lumpsum: number | null }) =>
-    (p.current_value ?? 0) > 0 ? (p.current_value ?? 0) : (p.executed_lumpsum ?? 0);
+  // ── Live portfolio values (netted against each goal's own declaration, so
+  //     platform money the client already reported at their last review isn't
+  //     added a second time — see lib/goalNetting.ts) ─────────────────────────
+  const posForNetting = (positions ?? []).map(p => ({
+    goal_id: p.goal_id as string | null, status: p.status as string | null,
+    executed_lumpsum: p.executed_lumpsum as number | null, executed_sip: p.executed_sip as number | null,
+    current_value: p.current_value as number | null, executed_at: p.executed_at as string | null,
+  }));
+  const holdForNetting = (holdings ?? []).map(h => ({
+    current_value: h.current_value as number | null, lumpsum_invested: h.lumpsum_invested as number | null,
+    monthly_sip: h.monthly_sip as number | null, added_at: h.added_at as string | null,
+  }));
+  const liveByGoal = computeGoalLiveAmounts(goals, posForNetting, holdForNetting, THIS_YEAR);
+  const totalLiveValue = Object.values(liveByGoal).reduce((s, v) => s + v.liveSaved, 0);
+  const totalLiveSip   = Object.values(liveByGoal).reduce((s, v) => s + v.liveSip, 0);
 
-  // Value + SIP linked to a specific goal
-  const linkedValue: Record<string, number> = {};
-  const linkedSip: Record<string, number> = {};
-  let unlinkedValue = 0, unlinkedSip = 0;
-  execPos.forEach(p => {
-    const v = posValue(p); const s = p.executed_sip ?? 0;
-    if (p.goal_id) {
-      linkedValue[p.goal_id] = (linkedValue[p.goal_id] ?? 0) + v;
-      linkedSip[p.goal_id]   = (linkedSip[p.goal_id] ?? 0) + s;
-    } else { unlinkedValue += v; unlinkedSip += s; }
-  });
-  // Existing holdings are not goal-linked — treat as common pool
-  (holdings ?? []).forEach(h => {
-    unlinkedValue += (h.current_value ?? 0) > 0 ? (h.current_value ?? 0) : (h.lumpsum_invested ?? 0);
-    unlinkedSip   += h.monthly_sip ?? 0;
-  });
-  const totalLiveValue = unlinkedValue + Object.values(linkedValue).reduce((s, v) => s + v, 0);
-  const totalLiveSip   = unlinkedSip + Object.values(linkedSip).reduce((s, v) => s + v, 0);
-
-  // Distribute the unlinked pool across goals proportional to future-value weight
-  const fvWeights = goals.map(g => (g.cost_today ?? 0) * Math.pow(1 + (g.inflation_pct ?? 6) / 100, Math.max(0, (g.target_year ?? THIS_YEAR) - THIS_YEAR)));
-  const fvTotal = fvWeights.reduce((s, v) => s + v, 0);
-
-  const calcs = goals.map((g, gi) => {
-    const share = fvTotal > 0 ? fvWeights[gi] / fvTotal : (goals.length ? 1 / goals.length : 0);
-    const liveSaved = (linkedValue[g.goal_id] ?? 0) + unlinkedValue * share;
-    const liveSip   = (linkedSip[g.goal_id] ?? 0) + unlinkedSip * share;
+  const calcs = goals.map(g => {
+    const { liveSaved, liveSip } = liveByGoal[g.goal_id] ?? { liveSaved: 0, liveSip: 0 };
     // Merge live portfolio into the goal's static questionnaire figures
     const gLive = { ...g,
       saved:       (g.saved ?? 0) + liveSaved,

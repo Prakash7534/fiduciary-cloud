@@ -15,28 +15,47 @@ export default function OverrideSelector({
   clientId,
   currentOverride,
   computedProfile,
+  currentRationale,
+  overrideBy,
+  overrideAt,
 }: {
   clientId: string;
   currentOverride: string | null;
   computedProfile: string;
+  currentRationale?: string | null;
+  overrideBy?: string | null;
+  overrideAt?: string | null;
 }) {
   const [value, setValue] = useState(currentOverride ?? "");
+  const [rationale, setRationale] = useState(currentRationale ?? "");
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState("");
   const router = useRouter();
 
   const handleChange = (v: string) => {
     setValue(v);
     setSaved(false);
+    setErr("");
   };
 
   const handleSave = () => {
+    if (value && !rationale.trim()) {
+      setErr("Rationale is required when setting an override.");
+      return;
+    }
+    setErr("");
     startTransition(async () => {
-      await fetch(`/api/clients/${clientId}/override`, {
+      const res = await fetch(`/api/clients/${clientId}/override`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ risk_override: v || null }),
+        body: JSON.stringify({ risk_override: value || null, rationale: value ? rationale.trim() : "" }),
       });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setErr(j.error ?? "Could not save override.");
+        return;
+      }
       setSaved(true);
       router.refresh();
     });
@@ -69,13 +88,31 @@ export default function OverrideSelector({
             {pending ? "Saving…" : saved ? "Saved ✓" : "Save"}
           </button>
         </div>
+
+        {isActive && (
+          <div className="mt-2">
+            <label className="text-[10px] text-[#6B7E86] block mb-1">
+              Rationale for override <span className="text-[#B4463C]">*</span> — required, appears on the advisory report
+            </label>
+            <textarea
+              value={rationale}
+              onChange={e => { setRationale(e.target.value); setSaved(false); setErr(""); }}
+              rows={3}
+              placeholder="e.g. Client explicitly requested a more conservative allocation than their capacity/tolerance scores imply, due to an upcoming liquidity need not captured in the questionnaire…"
+              className="w-full border border-[#CBD9DC] rounded-lg px-3 py-2 text-xs"
+            />
+          </div>
+        )}
+
+        {err && <p className="text-[10px] text-[#B4463C] mt-1.5">{err}</p>}
+
         {isActive && (
           <p className="text-[10px] text-[#7D6B2E] mt-1.5">
-            Override active — computed profile was <strong>{computedProfile}</strong>. Document rationale in Advisor Notes.
+            Override active — computed profile was <strong>{computedProfile}</strong>.
+            {overrideBy && overrideAt && (
+              <> Set by {overrideBy} on {new Date(overrideAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}.</>
+            )}
           </p>
-        )}
-        {!isActive && (
-          <p className="text-[10px] text-[#6B7E86] mt-1.5">Record the rationale in Advisor Notes.</p>
         )}
       </div>
 

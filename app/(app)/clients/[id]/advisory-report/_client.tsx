@@ -25,6 +25,7 @@ interface ReportData {
     will_status: string | null; pep: string | null; fatca: string | null; };
   scores: { cap: number; tol: number; kn: number; total: number; answered: number };
   analysis: { engineProfile: string; activeProfile: string; isOverridden: boolean;
+    overrideRationale: string | null; overrideBy: string | null; overrideAt: string | null;
     capR: number; tolR: number; govR: number; yearsToRetirement: number | null;
     flags: { name: string; val: string; why: string }[]; okFlags: number; };
   fp: { totalAssets: number; totalDebt: number; netWorth: number; income: number };
@@ -403,9 +404,20 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
           </div>
           <p className="text-[10px] text-[#6B7E86]">
             The governing profile takes the LOWER of capacity and tolerance — advice must never exceed what the client can afford, even if willing.
-            {d.analysis.isOverridden && <> <strong className="text-[#B4463C]">Adviser override applied</strong> — engine derived &quot;{d.analysis.engineProfile}&quot;; the adviser has set &quot;{d.analysis.activeProfile}&quot; (rationale must be documented below).</>}
+            {d.analysis.isOverridden && <> <strong className="text-[#B4463C]">Adviser override applied</strong> — engine derived &quot;{d.analysis.engineProfile}&quot;; the adviser has set &quot;{d.analysis.activeProfile}&quot;.</>}
             {d.analysis.yearsToRetirement != null && <> Years to retirement: <strong>{d.analysis.yearsToRetirement}</strong>.</>}
           </p>
+          {d.analysis.isOverridden && (
+            <div className="mt-2 bg-[#FDF2F1] border border-[#F0D8D5] rounded-lg px-3 py-2">
+              <p className="text-[9px] tracking-widest text-[#B4463C] uppercase font-semibold mb-1">Override rationale</p>
+              <p className="text-xs text-[#0F3A46]">{d.analysis.overrideRationale || "Not recorded."}</p>
+              {d.analysis.overrideBy && d.analysis.overrideAt && (
+                <p className="text-[10px] text-[#6B7E86] mt-1">
+                  — {d.analysis.overrideBy}, {new Date(d.analysis.overrideAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                </p>
+              )}
+            </div>
+          )}
         </Section>
 
         {/* 4 · Red flags */}

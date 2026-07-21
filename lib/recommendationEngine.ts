@@ -1,5 +1,6 @@
 // lib/recommendationEngine.ts — suitability, cap headroom & disclosure engine
 import type { UniverseRow } from "./allocationEngine";
+import { capValueRupees } from "./concentrationCap";
 
 const RISK_RANK: Record<string, number> = { "Low": 1, "Low-Medium": 2, "Medium": 3, "Medium-High": 4, "High": 5, "Very High": 5 };
 const PROFILE_RANK: Record<string, number> = {
@@ -51,7 +52,10 @@ export function assessRecommendation(inp: RecInput): RecAssessment {
       : "Long term — hold through at least one full market cycle (3-5 years+).";
 
   // ── Concentration cap headroom ─────────────────────────────────────────────
-  const capValue = totalPortfolio * capPct / 100;
+  // Same basis as Portfolio Construction's cap check (lib/concentrationCap.ts) —
+  // current portfolio value; no "pending new money" concept here since a
+  // recommendation is a single ad-hoc opportunity, not a coordinated deployment.
+  const capValue = capValueRupees(totalPortfolio, 0, capPct);
   const capHeadroom = Math.max(0, Math.round(capValue - existingInInstrument));
 
   // ── SAA class gap ──────────────────────────────────────────────────────────

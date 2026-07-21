@@ -258,6 +258,11 @@ export async function POST(
           cost_today: num(getField(`goal${g}_cost`)),
           saved: num(getField(`goal${g}_saved`)),
           monthly_sip: num(getField(`goal${g}_sip`)),
+          // Stamped so the goals calculator/advisory report can tell which
+          // platform-executed money (by executed_at) postdates this
+          // declaration and is genuinely new, vs. money the client's own
+          // "saved" figure above already reflects.
+          declared_at: new Date().toISOString(),
         };
         if (name && slotId) { await supabase.from("goals").update(fields).eq("goal_id", slotId); touched++; }
         else if (name && !slotId) { await supabase.from("goals").insert({ client_id: id, ...fields }); touched++; }
@@ -276,6 +281,7 @@ export async function POST(
           cost_today: num(getField(`goal${g}_cost`)),
           saved: num(getField(`goal${g}_saved`)),
           monthly_sip: num(getField(`goal${g}_sip`)),
+          declared_at: new Date().toISOString(),
         });
       }
       if (goalRows.length > 0) {

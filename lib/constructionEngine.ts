@@ -10,6 +10,7 @@
 
 import type { UniverseRow } from "./allocationEngine";
 import { scoreInstrument } from "./allocationEngine";
+import { capValueRupees } from "./concentrationCap";
 
 export interface ClassGap {
   assetClass: string;
@@ -155,8 +156,9 @@ export function proposeInstruments(
 ): ProposedLine[] {
   const lines: ProposedLine[] = [];
   const totalNew = gapPlan.newLumpsum + gapPlan.newSip * 12; // annualised weight basis
-  const totalAfter = gapPlan.totalCurrent + gapPlan.newLumpsum;
-  const capValue = totalAfter * concentrationCapPct / 100;   // ₹ cap per instrument (lumpsum basis)
+  // Same basis as Recommendations' cap check (lib/concentrationCap.ts) — current
+  // portfolio value, falling back to the new lumpsum only for a day-1/zero-value book.
+  const capValue = capValueRupees(gapPlan.totalCurrent, gapPlan.newLumpsum, concentrationCapPct);
 
   gapPlan.classes.forEach(cls => {
     if (cls.allocLumpsum <= 0 && cls.allocSip <= 0) return;

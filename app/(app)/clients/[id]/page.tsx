@@ -197,6 +197,9 @@ export default async function RiskProfilePage({ params }: { params: Promise<{ id
             clientId={id}
             currentOverride={client.risk_override ?? null}
             computedProfile={a.finalProfile}
+            currentRationale={client.risk_override_rationale ?? null}
+            overrideBy={client.risk_override_by ?? null}
+            overrideAt={client.risk_override_at ?? null}
           />
         </div>
 

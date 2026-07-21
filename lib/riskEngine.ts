@@ -71,6 +71,7 @@ export interface GoalRow {
   return_pct: number | null;
   priority: string | null;
   flexibility: string | null;
+  declared_at?: string | null;
 }
 
 export function goalCalc(g: GoalRow, thisYear = new Date().getFullYear()) {
