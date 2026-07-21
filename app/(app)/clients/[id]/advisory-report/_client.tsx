@@ -38,7 +38,9 @@ interface ReportData {
   positions: PositionD[];
   notes: { what_it_means: string; why_this_mix: string; deployment_plan: string;
     conflicts: string; additional_comments: string; next_review_date: string;
-    protect_actions: string; stabilise_actions: string; grow_actions: string; };
+    protect_actions: string; stabilise_actions: string; grow_actions: string;
+    adv_summary: string; adv_client_profile: string; adv_considerations: string;
+    adv_suitability: string; adv_next_steps: string; };
   firm: { advisor_name: string | null; firm_name: string | null; sebi_regn: string | null;
     address: string | null; phone: string | null; email: string | null; };
   adviserEmail: string;
@@ -290,6 +292,32 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
             Prepared pursuant to the SEBI (Investment Advisers) Regulations, 2013 — risk profiling (Reg. 16) and suitability (Reg. 17).
           </p>
         </div>
+
+        {/* Adviser's Advisory Summary — authored in the Advisory Notes workspace */}
+        {(() => {
+          const advItems: { label: string; text: string }[] = [
+            { label: "Summary", text: d.notes.adv_summary },
+            { label: "Client context & preferences", text: d.notes.adv_client_profile },
+            { label: "Key observations & how addressed", text: d.notes.adv_considerations },
+            { label: "Suitability rationale", text: d.notes.adv_suitability },
+            { label: "Agreed next steps & disclosures", text: d.notes.adv_next_steps },
+          ].filter(x => (x.text ?? "").trim());
+          if (advItems.length === 0) return null;
+          return (
+            <div className="rounded-lg border border-[#E3D6AE] bg-[#FCF9F0] px-5 py-4"
+              style={{ borderLeft: "4px solid #C39A38" }}>
+              <p className="text-[10px] font-bold tracking-widest text-[#8A6D1F] uppercase mb-2">Adviser&apos;s Advisory Summary</p>
+              <div className="space-y-2.5">
+                {advItems.map((x, i) => (
+                  <div key={i}>
+                    <p className="text-[11px] font-semibold text-[#175A69]">{x.label}</p>
+                    <p className="text-xs text-[#0F3A46] leading-relaxed whitespace-pre-line">{x.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 1 · Executive summary */}
         <Section num="1" title="EXECUTIVE SUMMARY">

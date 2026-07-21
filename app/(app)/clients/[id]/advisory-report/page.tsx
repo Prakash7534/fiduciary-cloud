@@ -227,6 +227,11 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
       stabilise_actions: notes?.stabilise_actions ?? "",
       grow_actions: notes?.grow_actions ?? "",
       next_review_date: notes?.next_review_date ?? nextReview.toISOString().slice(0, 10),
+      adv_summary: notes?.adv_summary ?? "",
+      adv_client_profile: notes?.adv_client_profile ?? "",
+      adv_considerations: notes?.adv_considerations ?? "",
+      adv_suitability: notes?.adv_suitability ?? "",
+      adv_next_steps: notes?.adv_next_steps ?? "",
     },
     firm: {
       advisor_name: firm?.advisor_name ?? null, firm_name: firm?.firm_name ?? null,
