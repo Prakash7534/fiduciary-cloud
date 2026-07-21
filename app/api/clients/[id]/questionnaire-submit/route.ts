@@ -256,6 +256,12 @@ export async function POST(
     if (syncIds) {
       // Precise reconciliation: update/insert per slot by embedded goal_id;
       // delete only a slot whose name was cleared AND had a known id.
+      // Existing rows so a no-id slot (e.g. a blank PDF for a new client that
+      // gets re-uploaded) matches by goal name and UPDATES instead of inserting
+      // a duplicate — otherwise repeat uploads pile up and figures double.
+      const { data: existGoals } = await supabase.from("goals").select("goal_id, goal_name").eq("client_id", id);
+      const usedG = new Set<string>();
+      const normG = (t: string) => t.trim().toLowerCase().replace(/\s+/g, " ");
       let touched = 0;
       for (let g = 1; g <= 6; g++) {
         const name = getField(`goal${g}_name`).trim();
@@ -272,9 +278,14 @@ export async function POST(
           // "saved" figure above already reflects.
           declared_at: new Date().toISOString(),
         };
-        if (name && slotId) { await supabase.from("goals").update(fields).eq("goal_id", slotId); touched++; }
-        else if (name && !slotId) { await supabase.from("goals").insert({ client_id: id, ...fields }); touched++; }
-        else if (!name && slotId) { await supabase.from("goals").delete().eq("goal_id", slotId); touched++; }
+        if (name && slotId) { await supabase.from("goals").update(fields).eq("goal_id", slotId); usedG.add(slotId); touched++; }
+        else if (name && !slotId) {
+          const m = (existGoals ?? []).find(x => !usedG.has(x.goal_id as string) && normG((x.goal_name as string) ?? "") === normG(name));
+          if (m) { await supabase.from("goals").update(fields).eq("goal_id", m.goal_id); usedG.add(m.goal_id as string); }
+          else { await supabase.from("goals").insert({ client_id: id, ...fields }); }
+          touched++;
+        }
+        else if (!name && slotId) { await supabase.from("goals").delete().eq("goal_id", slotId); usedG.add(slotId); touched++; }
       }
       if (touched > 0) loaded.push(`${touched} goal(s) reconciled`);
     } else {
@@ -302,20 +313,28 @@ export async function POST(
     // ── 5. Loans ─────────────────────────────────────────────────────────────
     const LOAN_TYPES = ["Home Loan","Vehicle Loan","Personal Loan","Education Loan","Gold Loan","Credit Card","Loan Against Property/Securities","Business Loan","Other"];
     if (syncIds) {
+      const { data: existLoans } = await supabase.from("loans").select("loan_id, loan_type").eq("client_id", id);
+      const usedL = new Set<string>();
       let touched = 0;
       for (let l = 1; l <= 9; l++) {
         const out = num(getField(`loan${l}_out`)); const lender = getField(`loan${l}_lender`).trim();
         const hasData = out != null || !!lender;
         const slotId = syncIds.loans?.[l - 1] ?? null;
+        const loanType = LOAN_TYPES[l-1];
         const fields = {
-          loan_type: LOAN_TYPES[l-1], lender: lender || null,
+          loan_type: loanType, lender: lender || null,
           outstanding: out, emi: num(getField(`loan${l}_emi`)),
           rate: num(getField(`loan${l}_rate`)),
           tenure_months: num(getField(`loan${l}_tenure`)) != null ? Math.round(num(getField(`loan${l}_tenure`))!) : null,
         };
-        if (hasData && slotId) { await supabase.from("loans").update(fields).eq("loan_id", slotId); touched++; }
-        else if (hasData && !slotId) { await supabase.from("loans").insert({ client_id: id, ...fields }); touched++; }
-        else if (!hasData && slotId) { await supabase.from("loans").delete().eq("loan_id", slotId); touched++; }
+        if (hasData && slotId) { await supabase.from("loans").update(fields).eq("loan_id", slotId); usedL.add(slotId); touched++; }
+        else if (hasData && !slotId) {
+          const m = (existLoans ?? []).find(x => !usedL.has(x.loan_id as string) && (x.loan_type as string) === loanType);
+          if (m) { await supabase.from("loans").update(fields).eq("loan_id", m.loan_id); usedL.add(m.loan_id as string); }
+          else { await supabase.from("loans").insert({ client_id: id, ...fields }); }
+          touched++;
+        }
+        else if (!hasData && slotId) { await supabase.from("loans").delete().eq("loan_id", slotId); usedL.add(slotId); touched++; }
       }
       if (touched > 0) loaded.push(`${touched} loan(s) reconciled`);
     } else {
@@ -339,6 +358,9 @@ export async function POST(
 
     // ── 6. Family members ────────────────────────────────────────────────────
     if (syncIds) {
+      const { data: existFam } = await supabase.from("family_members").select("fam_id, name").eq("client_id", id);
+      const usedF = new Set<string>();
+      const normF = (t: string) => t.trim().toLowerCase().replace(/\s+/g, " ");
       let touched = 0;
       for (let f = 1; f <= 4; f++) {
         const name = getField(`fam${f}_name`).trim();
@@ -350,9 +372,14 @@ export async function POST(
           annual_income: num(getField(`fam${f}_income`)),
           health_status: getField(`fam${f}_health`).trim() || null,
         };
-        if (name && slotId) { await supabase.from("family_members").update(fields).eq("fam_id", slotId); touched++; }
-        else if (name && !slotId) { await supabase.from("family_members").insert({ client_id: id, ...fields }); touched++; }
-        else if (!name && slotId) { await supabase.from("family_members").delete().eq("fam_id", slotId); touched++; }
+        if (name && slotId) { await supabase.from("family_members").update(fields).eq("fam_id", slotId); usedF.add(slotId); touched++; }
+        else if (name && !slotId) {
+          const m = (existFam ?? []).find(x => !usedF.has(x.fam_id as string) && normF((x.name as string) ?? "") === normF(name));
+          if (m) { await supabase.from("family_members").update(fields).eq("fam_id", m.fam_id); usedF.add(m.fam_id as string); }
+          else { await supabase.from("family_members").insert({ client_id: id, ...fields }); }
+          touched++;
+        }
+        else if (!name && slotId) { await supabase.from("family_members").delete().eq("fam_id", slotId); usedF.add(slotId); touched++; }
       }
       if (touched > 0) loaded.push(`${touched} family member(s) reconciled`);
     } else {
