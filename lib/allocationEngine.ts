@@ -2,7 +2,7 @@
 // Combines risk profile (SAA) with goal time horizons to produce
 // an instrument-level allocation plan with per-goal SIP mapping.
 
-import { type Assumptions, DEFAULT_ASSUMPTIONS, bucketReturn } from "./assumptions";
+import { type Assumptions, DEFAULT_ASSUMPTIONS, blendedReturn } from "./assumptions";
 
 export type GoalBucket = "short" | "medium" | "long";
 
@@ -74,6 +74,20 @@ export const BUCKET_CLASSES: Record<GoalBucket, string[]> = {
   medium: ["Debt", "Hybrid", "Gold"],
   long:   ["Equity", "International", "Gold", "Alternate"],
 };
+
+// Expected return for a goal, blended from the SAA weights of the asset classes
+// that serve the goal's horizon bucket (short -> Debt, medium -> Debt/Hybrid/Gold,
+// long -> Equity/Intl/Gold/Alternate), using the adviser's return assumptions.
+export function goalExpectedReturn(
+  targetYear: number | null,
+  saa: Record<string, number>,
+  a: Assumptions = DEFAULT_ASSUMPTIONS,
+  thisYear: number = new Date().getFullYear()
+): number {
+  const years = (targetYear ?? thisYear + 5) - thisYear;
+  const bucket: GoalBucket = years <= 3 ? "short" : years <= 7 ? "medium" : "long";
+  return blendedReturn(saa, a, BUCKET_CLASSES[bucket]);
+}
 
 const BUCKET_CATEGORIES: Record<GoalBucket, string[]> = {
   short:  ["Liquid", "Short Duration", "Money Market"],
@@ -194,7 +208,7 @@ export function buildAllocationPlan(
     for (const g of bGoals) {
       const years   = Math.max(1, (g.target_year ?? THIS_YEAR + 5) - THIS_YEAR);
       const infl    = g.inflation_pct ?? a.inflation;
-      const ret     = g.return_pct ?? bucketReturn(bucket, a);
+      const ret     = g.return_pct ?? blendedReturn(assetAllocation, a, BUCKET_CLASSES[bucket]);
       const fv      = futureValue(g.cost_today ?? 0, years, infl);
       const sip     = sipRequired(fv, g.saved ?? 0, years, ret);
       bucketRequired += fv;
@@ -232,7 +246,7 @@ export function buildAllocationPlan(
     for (const g of bGoals) {
       const years  = Math.max(1, (g.target_year ?? THIS_YEAR + 5) - THIS_YEAR);
       const infl   = g.inflation_pct ?? a.inflation;
-      const ret    = g.return_pct ?? bucketReturn(bucket, a);
+      const ret    = g.return_pct ?? blendedReturn(assetAllocation, a, BUCKET_CLASSES[bucket]);
       const fv     = futureValue(g.cost_today ?? 0, years, infl);
       const sip    = sipRequired(fv, g.saved ?? 0, years, ret);
 

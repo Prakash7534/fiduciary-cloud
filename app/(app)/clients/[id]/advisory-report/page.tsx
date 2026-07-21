@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { analyseClient, financialPosition, scoreAnswers, yearsBetween, goalCalc } from "@/lib/riskEngine";
 import type { FinancialFacts, LoanRow, InvestmentRow, RiskAnswer, GoalRow } from "@/lib/riskEngine";
-import { BASE_ALLOCATION } from "@/lib/allocationEngine";
+import { BASE_ALLOCATION, goalExpectedReturn } from "@/lib/allocationEngine";
 import { buildGapPlan, currentValueByClass } from "@/lib/constructionEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import AdvisoryReportClient from "./_client";
@@ -126,12 +126,13 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
   const goalRows = goals.map(g => {
     const { liveSaved, liveSip } = liveByGoal[g.goal_id] ?? { liveSaved: 0, liveSip: 0 };
     const gLive = { ...g, saved: (g.saved ?? 0) + liveSaved, monthly_sip: (g.monthly_sip ?? 0) + liveSip };
-    const c = goalCalc(gLive, THIS_YEAR, A);
-    const r = (g.return_pct ?? A.defaultGoalReturn) / 100;
+    const gret = g.return_pct ?? goalExpectedReturn(g.target_year, saa, A, THIS_YEAR);
+    const c = goalCalc(gLive, THIS_YEAR, { ...A, defaultGoalReturn: gret });
+    const r = gret / 100;
     const lumpsumNow = c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
     return {
       goal_name: g.goal_name, target_year: g.target_year, cost_today: g.cost_today,
-      priority: g.priority, inflation_pct: g.inflation_pct ?? A.inflation, return_pct: g.return_pct ?? A.defaultGoalReturn,
+      priority: g.priority, inflation_pct: g.inflation_pct ?? A.inflation, return_pct: gret,
       years: c.years, fv: Math.round(c.fv), projected: Math.round(c.path), gap: Math.round(c.gap),
       extraSip: Math.round(c.extraSip), lumpsumNow: Math.round(lumpsumNow),
       liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip),

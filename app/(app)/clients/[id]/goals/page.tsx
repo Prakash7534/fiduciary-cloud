@@ -1,7 +1,8 @@
 // app/(app)/clients/[id]/goals/page.tsx
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import { goalCalc, type GoalRow } from "@/lib/riskEngine";
+import { goalCalc, profileFromAnswers, type GoalRow, type RiskAnswer } from "@/lib/riskEngine";
+import { BASE_ALLOCATION, goalExpectedReturn } from "@/lib/allocationEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import { resolveAssumptions } from "@/lib/assumptions";
 
@@ -27,9 +28,10 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   const supabase = await createClient();
   const authUser = (await supabase.auth.getUser()).data.user;
 
-  const [{ data: client, error }, { data: goalsRaw }, { data: facts }, { data: positions }, { data: holdings }] = await Promise.all([
-    supabase.from("clients").select("full_name, dob").eq("client_id", id).single(),
+  const [{ data: client, error }, { data: goalsRaw }, { data: answersRaw }, { data: facts }, { data: positions }, { data: holdings }] = await Promise.all([
+    supabase.from("clients").select("full_name, dob, risk_override, allocation_overrides").eq("client_id", id).single(),
     supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
+    supabase.from("risk_answers").select("question_num, answer").eq("client_id", id),
     supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
     supabase.from("portfolio_positions").select("goal_id, status, executed_lumpsum, executed_sip, current_value, executed_at").eq("client_id", id),
     supabase.from("portfolio_holdings").select("current_value, lumpsum_invested, monthly_sip, added_at").eq("client_id", id),
@@ -38,6 +40,10 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   if (error || !client) notFound();
   const { data: firm } = await supabase.from("firm_settings").select("*").eq("user_id", authUser?.id ?? "").maybeSingle();
   const A = resolveAssumptions(firm as Record<string, unknown> | null);
+  const PROFILE_TO_SAA: Record<string, string> = { "Conservative": "Conservative", "Moderately Conservative": "Moderate Conservative", "Balanced / Moderate": "Moderate", "Moderately Aggressive": "Moderate Aggressive", "Aggressive": "Aggressive" };
+  const activeProfile = (client.risk_override as string | null) ?? profileFromAnswers((answersRaw ?? []).map(r => ({ question_num: r.question_num as number, answer: r.answer as RiskAnswer["answer"] })));
+  const savedOv = client.allocation_overrides as Record<string, unknown> | null;
+  const saa = ((savedOv?.asset_class as Record<string, number> | undefined) ?? BASE_ALLOCATION[PROFILE_TO_SAA[activeProfile] ?? "Moderate"]);
 
   const goals = (goalsRaw ?? []) as GoalRow[];
   const income = ((facts?.income_self ?? 0) + (facts?.income_spouse ?? 0) + (facts?.income_other ?? 0)) / 12;
@@ -67,10 +73,11 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
       saved:       (g.saved ?? 0) + liveSaved,
       monthly_sip: (g.monthly_sip ?? 0) + liveSip,
     };
-    const c = goalCalc(gLive, THIS_YEAR, A);
-    const r = (g.return_pct ?? A.defaultGoalReturn) / 100;
+    const gret = g.return_pct ?? goalExpectedReturn(g.target_year, saa, A, THIS_YEAR);
+    const c = goalCalc(gLive, THIS_YEAR, { ...A, defaultGoalReturn: gret });
+    const r = gret / 100;
     const lumpsumNow = c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
-    return { g: gLive, c, lumpsumNow: Math.round(lumpsumNow), liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip) };
+    return { g: gLive, c, gret, lumpsumNow: Math.round(lumpsumNow), liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip) };
   });
   const totalExtraSip   = calcs.reduce((s, { c }) => s + c.extraSip, 0);
   const totalLumpsumNow = calcs.reduce((s, x) => s + x.lumpsumNow, 0);
@@ -114,7 +121,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
         </div>
       ) : (
         <div className="space-y-4">
-          {calcs.map(({ g, c, lumpsumNow, liveSaved, liveSip }, i) => {
+          {calcs.map(({ g, c, gret, lumpsumNow, liveSaved, liveSip }, i) => {
             const fundedPct = c.fv > 0 ? Math.min(100, (c.path / c.fv) * 100) : 100;
             const isFunded = c.gap === 0;
             const barColor = fundedPct >= 90 ? FUNDED_COLOR : fundedPct >= 50 ? PARTIAL_COLOR : GAP_COLOR;
@@ -188,7 +195,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
                       <span className="text-xs text-[#6B7E86]">OR lumpsum today: </span>
                       <span className="text-sm font-bold text-[#8A6D1C]">{fmtCr(lumpsumNow)}</span>
                     </div>
-                    <div className="text-xs text-[#6B7E86]">@ {g.return_pct ?? A.defaultGoalReturn}% p.a.</div>
+                    <div className="text-xs text-[#6B7E86]">@ {Math.round(gret * 10) / 10}% p.a. (SAA blend)</div>
                   </div>
                 )}
                 {c.gap === 0 && (

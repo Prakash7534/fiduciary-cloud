@@ -71,3 +71,27 @@ export function bucketReturn(bucket: "short" | "medium" | "long", a: Assumptions
   if (bucket === "medium") return Math.round((a.equity + a.debt) / 2 * 10) / 10;
   return a.equity;
 }
+
+// Map an asset class to its assumed return.
+export function classReturn(assetClass: string, a: Assumptions): number {
+  switch (assetClass) {
+    case "Equity":        return a.equity;
+    case "Debt":          return a.debt;
+    case "Gold":          return a.gold;
+    case "International":  return a.international;
+    case "Alternate":     return a.alternate;
+    case "Hybrid":        return a.hybrid;
+    default:              return a.defaultGoalReturn;
+  }
+}
+
+// SAA-weighted expected return across the given asset classes (or all classes
+// present in the SAA map). This is what makes the required goal SIP reflect the
+// adviser's equity/debt/gold/international/alternate return assumptions in the
+// proportions of the client's strategic allocation, instead of a flat number.
+export function blendedReturn(saa: Record<string, number>, a: Assumptions, classes?: string[]): number {
+  const keys = classes && classes.length ? classes : Object.keys(saa);
+  let w = 0, r = 0;
+  for (const c of keys) { const wt = saa[c] ?? 0; if (wt > 0) { w += wt; r += wt * classReturn(c, a); } }
+  return w > 0 ? Math.round((r / w) * 100) / 100 : a.defaultGoalReturn;
+}
