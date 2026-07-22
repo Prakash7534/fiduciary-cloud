@@ -6,6 +6,7 @@ import { BASE_ALLOCATION, goalExpectedReturn } from "@/lib/allocationEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import { resolveAssumptions } from "@/lib/assumptions";
 import RetirementPlanner from "./_retirement";
+import { retirementCorpus } from "@/lib/retirement";
 
 const THIS_YEAR = new Date().getFullYear();
 
@@ -78,11 +79,9 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     const c = goalCalc(gLive, THIS_YEAR, { ...A, defaultGoalReturn: gret });
     const r = gret / 100;
     const lumpsumNow = c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
-    return { g: gLive, c, gret, lumpsumNow: Math.round(lumpsumNow), liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip) };
+    return { g: gLive, c, gret, lumpsumNow: Math.round(lumpsumNow), liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip),
+      ret: null as null | { expToday: number; retAge: number; life: number; realRate: number; existingCorpus: number; existingSip: number } };
   });
-  const totalExtraSip   = calcs.reduce((s, { c }) => s + c.extraSip, 0);
-  const totalLumpsumNow = calcs.reduce((s, x) => s + x.lumpsumNow, 0);
-
   // ── Retirement corpus planner inputs (drawdown model) ─────────────────────
   const dob = client.dob ? new Date(client.dob as string) : null;
   const _now = new Date();
@@ -118,6 +117,29 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     defPostRet: A.postRetReturn,
     defPostRetInflation: A.postRetInflation,
   };
+
+  // Align the Retirement goal with the drawdown corpus: its future value, gap,
+  // required SIP and lumpsum all come from the PV model so the goal card and the
+  // aggregate totals match the Retirement planner above (single source of truth).
+  const retResult = retGoal ? retirementCorpus(retirementBase) : null;
+  if (retGoal && retResult) {
+    const e = calcs.find(x => x.g.goal_id === retGoal.goal_id);
+    if (e) {
+      e.c.fv = retResult.corpusRequired;
+      e.c.path = retResult.projectedCorpus;
+      e.c.gap = retResult.shortfall;
+      e.c.extraSip = retResult.requiredMonthlySip;
+      e.c.years = retResult.yearsToRetirement;
+      e.lumpsumNow = retResult.requiredLumpsumToday;
+      e.ret = {
+        expToday: retResult.retExpenseMonthlyToday,
+        retAge: retirementAge, life: lifeExpectancy, realRate: retResult.realRatePct,
+        existingCorpus: retirementBase.existingCorpus, existingSip: retirementBase.existingMonthlySip,
+      };
+    }
+  }
+  const totalExtraSip   = calcs.reduce((s, { c }) => s + c.extraSip, 0);
+  const totalLumpsumNow = calcs.reduce((s, x) => s + x.lumpsumNow, 0);
 
   const FUNDED_COLOR  = "#2E7D5B";
   const PARTIAL_COLOR = "#C39A38";
@@ -161,7 +183,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
         </div>
       ) : (
         <div className="space-y-4">
-          {calcs.map(({ g, c, gret, lumpsumNow, liveSaved, liveSip }, i) => {
+          {calcs.map(({ g, c, gret, lumpsumNow, liveSaved, liveSip, ret }, i) => {
             const fundedPct = c.fv > 0 ? Math.min(100, (c.path / c.fv) * 100) : 100;
             const isFunded = c.gap === 0;
             const barColor = fundedPct >= 90 ? FUNDED_COLOR : fundedPct >= 50 ? PARTIAL_COLOR : GAP_COLOR;
@@ -178,6 +200,11 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
                       {g.priority && ` · Priority: ${g.priority}`}
                       {g.flexibility && ` · ${g.flexibility}`}
                     </p>
+                    {ret && (
+                      <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-[#175A69] bg-[#EAF3F4] border border-[#CBD9DC] rounded-full px-2 py-0.5">
+                        Drawdown corpus · life expectancy {ret.life} · real return {ret.realRate}%
+                      </div>
+                    )}
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-semibold shrink-0 ${
                     isFunded ? "bg-[#E4F1EA] text-[#2E7D5B]" : fundedPct >= 50 ? "bg-[#FEF9E7] text-[#7D6B2E]" : "bg-[#F8E7E4] text-[#B4463C]"
@@ -190,7 +217,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
                 <div className="mb-4">
                   <div className="flex justify-between text-xs text-[#6B7E86] mb-1">
                     <span>Projected corpus: {fmtCr(c.path)}</span>
-                    <span>Target (inflation-adj): {fmtCr(c.fv)}</span>
+                    <span>{ret ? "Corpus required" : "Target (inflation-adj)"}: {fmtCr(c.fv)}</span>
                   </div>
                   <ProgressBar pct={fundedPct} color={barColor} />
                   <div className="text-right text-xs mt-0.5" style={{ color: barColor }}>
@@ -201,22 +228,22 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
                 {/* Numbers grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                   <div className="bg-[#F5F9FA] rounded-lg p-3">
-                    <div className="text-xs text-[#6B7E86] mb-1">Cost today</div>
-                    <div className="font-semibold text-[#0F3A46]">{fmtCr(g.cost_today ?? 0)}</div>
+                    <div className="text-xs text-[#6B7E86] mb-1">{ret ? "Retirement expense (today)" : "Cost today"}</div>
+                    <div className="font-semibold text-[#0F3A46]">{ret ? fmtCr(ret.expToday) + "/mo" : fmtCr(g.cost_today ?? 0)}</div>
                   </div>
                   <div className="bg-[#F5F9FA] rounded-lg p-3">
-                    <div className="text-xs text-[#6B7E86] mb-1">Future cost ({g.inflation_pct ?? A.inflation}% p.a.)</div>
+                    <div className="text-xs text-[#6B7E86] mb-1">{ret ? `Corpus required @ age ${ret.retAge}` : `Future cost (${g.inflation_pct ?? A.inflation}% p.a.)`}</div>
                     <div className="font-semibold text-[#0F3A46]">{fmtCr(c.fv)}</div>
                   </div>
                   <div className="bg-[#F5F9FA] rounded-lg p-3">
-                    <div className="text-xs text-[#6B7E86] mb-1">Saved (incl. live portfolio)</div>
-                    <div className="font-semibold text-[#0F3A46]">{g.saved ? fmtCr(g.saved) : "—"}</div>
-                    {liveSaved > 0 && <div className="text-[10px] text-[#175A69] mt-0.5">↳ {fmtCr(liveSaved)} from portfolio</div>}
+                    <div className="text-xs text-[#6B7E86] mb-1">{ret ? "Existing corpus (EPF/NPS+)" : "Saved (incl. live portfolio)"}</div>
+                    <div className="font-semibold text-[#0F3A46]">{ret ? (ret.existingCorpus ? fmtCr(ret.existingCorpus) : "—") : (g.saved ? fmtCr(g.saved) : "—")}</div>
+                    {!ret && liveSaved > 0 && <div className="text-[10px] text-[#175A69] mt-0.5">↳ {fmtCr(liveSaved)} from portfolio</div>}
                   </div>
                   <div className="bg-[#F5F9FA] rounded-lg p-3">
-                    <div className="text-xs text-[#6B7E86] mb-1">SIP (incl. live portfolio)</div>
-                    <div className="font-semibold text-[#0F3A46]">{g.monthly_sip ? fmtCr(g.monthly_sip) + "/mo" : "—"}</div>
-                    {liveSip > 0 && <div className="text-[10px] text-[#175A69] mt-0.5">↳ {fmtCr(liveSip)}/mo from portfolio</div>}
+                    <div className="text-xs text-[#6B7E86] mb-1">{ret ? "Existing SIP" : "SIP (incl. live portfolio)"}</div>
+                    <div className="font-semibold text-[#0F3A46]">{ret ? (ret.existingSip ? fmtCr(ret.existingSip) + "/mo" : "—") : (g.monthly_sip ? fmtCr(g.monthly_sip) + "/mo" : "—")}</div>
+                    {!ret && liveSip > 0 && <div className="text-[10px] text-[#175A69] mt-0.5">↳ {fmtCr(liveSip)}/mo from portfolio</div>}
                   </div>
                 </div>
 

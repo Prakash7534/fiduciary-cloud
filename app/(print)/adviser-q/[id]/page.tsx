@@ -17,7 +17,7 @@ interface ClientRow {
 interface FFRow {
   income_self: number | null; income_spouse: number | null; income_other: number | null;
   life_cover: number | null; health_cover: number | null; employer_cover: number | null;
-  retirement_age: number | null; will_status: string | null; pep: string | null;
+  retirement_age: number | null; life_expectancy: number | null; will_status: string | null; pep: string | null;
   fatca: string | null; covers_held: string | null; nominees_updated: string | null;
   trust_status: string | null; poa_status: string | null; guardian_status: string | null;
 }
@@ -290,6 +290,7 @@ export default async function PrintFilledPage({ params }: { params: Promise<{ id
                 <Row2 label="Other income (p.a.)"   value={fm(financial.income_other)} />
                 <Row2 label="Life insurance cover"  value={fm(financial.life_cover)} />
                 <Row2 label="Target retirement age" value={f(financial.retirement_age)} />
+                <Row2 label="Planned life expectancy" value={f(financial.life_expectancy)} />
                 <Row2 label="Will in place"         value={f(financial.will_status)} />
                 <Row2 label="Politically exposed"   value={f(financial.pep)} />
                 <Row2 label="FATCA applicable"      value={f(financial.fatca)} />
