@@ -260,9 +260,9 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
               <div className="text-[10px] text-[#6B7E86] mt-1">{salaried ? "corpus + SIP + EPF grown" : "corpus + SIP grown"}</div>
             </div>
             <div className="rounded-lg p-3 border" style={{ background: r.shortfall > 0 ? "#FFF7F6" : "#E4F1EA", borderColor: r.shortfall > 0 ? "#E4B3AE" : "#B3D9C3" }}>
-              <div className="text-[11px] text-[#6B7E86] mb-1">Shortfall</div>
+              <div className="text-[11px] text-[#6B7E86] mb-1">{r.shortfall > 0 ? "Shortfall" : "Surplus"}</div>
               <div className="font-bold" style={{ color: r.shortfall > 0 ? "#B4463C" : "#2E7D5B" }}>
-                {r.shortfall > 0 ? fmtCr(r.shortfall) : "Fully funded ✓"}
+                {r.shortfall > 0 ? fmtCr(r.shortfall) : fmtCr(r.surplus)}
               </div>
               <div className="text-[10px] text-[#6B7E86] mt-1">{funded}% funded</div>
             </div>
@@ -272,19 +272,34 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
             <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(100, funded)}%`, background: fundColor }} />
           </div>
 
-          {r.shortfall > 0 && (
-            <div className="flex items-center justify-between flex-wrap gap-2 bg-[#FFF7F6] border border-[#E4B3AE] rounded-lg px-4 py-2.5">
-              <div>
-                <span className="text-xs text-[#6B7E86]">Additional SIP needed: </span>
-                <span className="text-sm font-bold text-[#B4463C]">{fmtCr(r.requiredMonthlySip)}/mo</span>
-                <span className="text-[10px] text-[#6B7E86]"> (on top of current)</span>
-              </div>
-              <div>
-                <span className="text-xs text-[#6B7E86]">OR lumpsum today: </span>
-                <span className="text-sm font-bold text-[#8A6D1C]">{fmtCr(r.requiredLumpsumToday)}</span>
-              </div>
-            </div>
-          )}
+          <div className="flex items-center justify-between flex-wrap gap-2 rounded-lg px-4 py-2.5 border"
+            style={{ background: r.shortfall > 0 ? "#FFF7F6" : "#E4F1EA", borderColor: r.shortfall > 0 ? "#E4B3AE" : "#B3D9C3" }}>
+            {r.shortfall > 0 ? (
+              <>
+                <div>
+                  <span className="text-xs text-[#6B7E86]">Additional SIP needed: </span>
+                  <span className="text-sm font-bold text-[#B4463C]">{fmtCr(r.requiredMonthlySip)}/mo</span>
+                  <span className="text-[10px] text-[#6B7E86]"> (on top of current)</span>
+                </div>
+                <div>
+                  <span className="text-xs text-[#6B7E86]">OR lumpsum today: </span>
+                  <span className="text-sm font-bold text-[#8A6D1C]">{fmtCr(r.requiredLumpsumToday)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <span className="text-xs text-[#6B7E86]">Additional SIP needed: </span>
+                  <span className="text-sm font-bold text-[#2E7D5B]">₹0/mo</span>
+                  <span className="text-[10px] text-[#6B7E86]"> — already on track</span>
+                </div>
+                <div>
+                  <span className="text-xs text-[#6B7E86]">Projected surplus: </span>
+                  <span className="text-sm font-bold text-[#2E7D5B]">{fmtCr(r.surplus)}</span>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Calculation breakdown — mirrors the standard PV worksheet */}
           <div className="bg-[#FAFCFC] border border-[#E7EFEF] rounded-lg px-4 py-2">

@@ -51,6 +51,7 @@ export interface RetirementResult {
   requiredMonthlySip: number;               // ADDITIONAL, on top of existing
   requiredLumpsumToday: number;             // alternative one-off today
   fundedPct: number;
+  surplus: number;                          // projected − required (positive = over-funded)
   depletion: { age: number; corpusStart: number }[];
   runsOutAtAge: number | null;              // only when under-funded
 }
@@ -143,7 +144,8 @@ export function retirementCorpus(inp: RetirementInput): RetirementResult {
     shortfall: round(shortfall),
     requiredMonthlySip: round(reqSip),
     requiredLumpsumToday: round(reqLumpsum),
-    fundedPct: corpus > 0 ? Math.min(100, Math.round(projected / corpus * 100)) : 100,
+    fundedPct: corpus > 0 ? Math.round(projected / corpus * 100) : 100,
+    surplus: round(projected - corpus),
     depletion,
     runsOutAtAge: runsOut,
   };
