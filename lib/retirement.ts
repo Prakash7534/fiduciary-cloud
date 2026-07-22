@@ -25,8 +25,14 @@ export interface RetirementInput {
   accumulationReturnPct: number;   // return while accumulating (pre-retirement)
   postRetReturnPct: number;        // return the corpus earns during drawdown
   monthlyPensionNow: number;       // today's money — pension / other retirement income
-  existingCorpus: number;          // already earmarked (EPF/NPS + saved)
+  existingCorpus: number;          // non-EPF corpus earmarked, grows at accumulation return
   existingMonthlySip: number;      // ongoing SIP toward retirement
+  // EPF (salaried only) — contributions grow with salary and earn the EPF rate
+  salaried: boolean;
+  epfBalance: number;              // current EPF balance
+  epfMonthlyContribution: number;  // current combined (employee + employer) monthly contribution
+  epfRatePct: number;              // EPF interest rate
+  epfSalaryGrowthPct: number;      // salary growth — grows the contribution each year
 }
 
 export interface RetirementResult {
@@ -40,6 +46,7 @@ export interface RetirementResult {
   realRatePct: number;                      // annual inflation-adjusted return
   corpusRequired: number;                   // present value at the retirement date
   projectedCorpus: number;                  // existing corpus + SIP grown to retirement
+  epfCorpusAtRetirement: number;            // EPF accumulation by the retirement date
   shortfall: number;
   requiredMonthlySip: number;               // ADDITIONAL, on top of existing
   requiredLumpsumToday: number;             // alternative one-off today
@@ -85,7 +92,24 @@ export function retirementCorpus(inp: RetirementInput): RetirementResult {
   const fvSip = inp.existingMonthlySip > 0 && nm > 0
     ? inp.existingMonthlySip * (Math.pow(1 + rm, nm) - 1) / rm
     : 0;
-  const projected = fvExisting + fvSip;
+  // EPF (salaried): current balance grown at the EPF rate + growing-annuity FV of
+  // the annual contribution rising with salary growth.
+  let epfCorpus = 0;
+  if (inp.salaried) {
+    const rE = inp.epfRatePct / 100;
+    const g = inp.epfSalaryGrowthPct / 100;
+    const fvBal = inp.epfBalance * Math.pow(1 + rE, yearsToRet);
+    const annualC = inp.epfMonthlyContribution * 12;
+    let fvContrib = 0;
+    if (yearsToRet > 0 && annualC > 0) {
+      fvContrib = Math.abs(rE - g) < 1e-9
+        ? annualC * yearsToRet * Math.pow(1 + rE, yearsToRet - 1)
+        : annualC * (Math.pow(1 + rE, yearsToRet) - Math.pow(1 + g, yearsToRet)) / (rE - g);
+    }
+    epfCorpus = fvBal + fvContrib;
+  }
+
+  const projected = fvExisting + fvSip + epfCorpus;
   const shortfall = Math.max(0, corpus - projected);
   const reqSip = shortfall > 0 && nm > 0 ? shortfall * rm / (Math.pow(1 + rm, nm) - 1) : 0;
   const reqLumpsum = shortfall > 0 ? shortfall / Math.pow(1 + rAcc, yearsToRet) : 0;
@@ -115,6 +139,7 @@ export function retirementCorpus(inp: RetirementInput): RetirementResult {
     realRatePct: Math.round(realAnnual * 10000) / 100,
     corpusRequired: round(corpus),
     projectedCorpus: round(projected),
+    epfCorpusAtRetirement: round(epfCorpus),
     shortfall: round(shortfall),
     requiredMonthlySip: round(reqSip),
     requiredLumpsumToday: round(reqLumpsum),

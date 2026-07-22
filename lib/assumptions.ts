@@ -19,6 +19,8 @@ export interface Assumptions {
   postRetInflation: number;  // % p.a. — inflation during the retirement (drawdown) years
   lifeExpectancy: number;    // years — default planning life expectancy
   replacementPct: number;    // % — retirement expenses as a share of current expenses
+  epfRate: number;           // % p.a. — EPF interest rate (salaried)
+  salaryGrowth: number;      // % p.a. — salary growth, grows EPF contributions
 }
 
 // Defaults chosen so bucketReturn() reproduces the previous hard-coded
@@ -37,6 +39,8 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   postRetInflation: 6,
   lifeExpectancy: 85,
   replacementPct: 60,
+  epfRate: 8.25,
+  salaryGrowth: 8,
 };
 
 // Labels + which firm_settings column backs each field (used by the Settings UI).
@@ -73,6 +77,8 @@ export function resolveAssumptions(firm: Record<string, unknown> | null | undefi
     postRetInflation:  num(f.assume_post_ret_inflation, DEFAULT_ASSUMPTIONS.postRetInflation),
     lifeExpectancy:    num(f.assume_life_expectancy, DEFAULT_ASSUMPTIONS.lifeExpectancy),
     replacementPct:    num(f.assume_replacement_pct, DEFAULT_ASSUMPTIONS.replacementPct),
+    epfRate:           num(f.assume_epf_rate, DEFAULT_ASSUMPTIONS.epfRate),
+    salaryGrowth:      num(f.assume_salary_growth, DEFAULT_ASSUMPTIONS.salaryGrowth),
   };
 }
 

@@ -20,6 +20,8 @@ const RETIREMENT: { col: string; label: string; unit: string; hint: string; dkey
   { col: "assume_post_ret_inflation", label: "Post-retirement inflation", unit: "%", dkey: "postRetInflation", hint: "Inflation during the retirement (drawdown) years" },
   { col: "assume_life_expectancy", label: "Life expectancy", unit: "yrs", dkey: "lifeExpectancy", hint: "Default planning age to which the retirement corpus must last" },
   { col: "assume_replacement_pct", label: "Expense replacement", unit: "%", dkey: "replacementPct", hint: "Retirement expenses as a share of current expenses" },
+  { col: "assume_epf_rate", label: "EPF interest rate", unit: "%", dkey: "epfRate", hint: "EPF yield for salaried clients (EPFO declares ~8.25%)" },
+  { col: "assume_salary_growth", label: "Salary growth", unit: "%", dkey: "salaryGrowth", hint: "Annual salary growth — grows EPF contributions over time" },
 ];
 
 export default function SettingsClient({ initial, defaults }: { initial: Record<string, unknown>; defaults: Assumptions }) {

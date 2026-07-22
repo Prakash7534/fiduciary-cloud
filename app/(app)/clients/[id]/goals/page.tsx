@@ -34,7 +34,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     supabase.from("clients").select("full_name, dob, risk_override, allocation_overrides").eq("client_id", id).single(),
     supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
     supabase.from("risk_answers").select("question_num, answer").eq("client_id", id),
-    supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual, retirement_age, life_expectancy, ret_pension, epf_nps_corpus, ret_expenses, retirement_replacement_pct").eq("client_id", id).maybeSingle(),
+    supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual, retirement_age, life_expectancy, ret_pension, epf_nps_corpus, ret_expenses, retirement_replacement_pct, is_salaried, epf_basic_salary, epf_employee_pct, epf_employer_pct, epf_rate_pct, epf_salary_growth_pct").eq("client_id", id).maybeSingle(),
     supabase.from("portfolio_positions").select("goal_id, status, executed_lumpsum, executed_sip, current_value, executed_at").eq("client_id", id),
     supabase.from("portfolio_holdings").select("current_value, lumpsum_invested, monthly_sip, added_at").eq("client_id", id),
   ]);
@@ -101,6 +101,17 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   const retGoal = goals.find(g => /retire/i.test(g.goal_name ?? ""));
   const retLive = retGoal ? (liveByGoal[retGoal.goal_id] ?? { liveSaved: 0, liveSip: 0 }) : { liveSaved: 0, liveSip: 0 };
   const existingRetSip = retGoal ? (retGoal.monthly_sip ?? 0) + retLive.liveSip : 0;
+  // EPF (salaried only). The captured EPF/NPS figure is treated as the current
+  // EPF balance (grown at the EPF rate); non-salaried keep it as ordinary corpus.
+  const salaried = facts?.is_salaried === true;
+  const epfBasicSalary = Number(facts?.epf_basic_salary ?? 0);
+  const epfEmployeePct = facts?.epf_employee_pct != null ? Number(facts.epf_employee_pct) : 12;
+  const epfEmployerPct = facts?.epf_employer_pct != null ? Number(facts.epf_employer_pct) : 12;
+  const epfRatePct = facts?.epf_rate_pct != null ? Number(facts.epf_rate_pct) : A.epfRate;
+  const epfSalaryGrowthPct = facts?.epf_salary_growth_pct != null ? Number(facts.epf_salary_growth_pct) : A.salaryGrowth;
+  const epfNps = Number(facts?.epf_nps_corpus ?? 0);
+  const epfBalance = salaried ? epfNps : 0;
+  const nonEpfCorpus = salaried ? 0 : epfNps;
   const retirementBase = {
     currentAge, retirementAge, lifeExpectancy,
     currentMonthlyExpense: Math.round(expenses),
@@ -110,18 +121,28 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     accumulationReturnPct: Math.round(accReturn * 10) / 10,
     postRetReturnPct: A.postRetReturn,
     monthlyPensionNow: Number(facts?.ret_pension ?? 0),
-    existingCorpus: Number(facts?.epf_nps_corpus ?? 0),
+    existingCorpus: nonEpfCorpus,
     existingMonthlySip: Math.round(existingRetSip),
+    salaried,
+    epfBasicSalary,
+    epfEmployeePct,
+    epfEmployerPct,
+    epfBalance,
+    epfRatePct,
+    epfSalaryGrowthPct,
     defLifeExpectancy: A.lifeExpectancy,
     defReplacementPct: A.replacementPct,
     defPostRet: A.postRetReturn,
     defPostRetInflation: A.postRetInflation,
+    defEpfRate: A.epfRate,
+    defSalaryGrowth: A.salaryGrowth,
   };
 
   // Align the Retirement goal with the drawdown corpus: its future value, gap,
   // required SIP and lumpsum all come from the PV model so the goal card and the
   // aggregate totals match the Retirement planner above (single source of truth).
-  const retResult = retGoal ? retirementCorpus(retirementBase) : null;
+  const epfMonthlyContribution = Math.round(epfBasicSalary * (epfEmployeePct + epfEmployerPct) / 100);
+  const retResult = retGoal ? retirementCorpus({ ...retirementBase, epfMonthlyContribution }) : null;
   if (retGoal && retResult) {
     const e = calcs.find(x => x.g.goal_id === retGoal.goal_id);
     if (e) {

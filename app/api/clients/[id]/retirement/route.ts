@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Persist the per-client retirement levers set on the Goal Calculator's
 // retirement planner. Assumption fields (returns, inflation) stay firm-level.
-const NUMERIC = ["life_expectancy", "retirement_replacement_pct", "retirement_age", "ret_pension"] as const;
+const NUMERIC = ["life_expectancy", "retirement_replacement_pct", "retirement_age", "ret_pension",
+  "epf_basic_salary", "epf_employee_pct", "epf_employer_pct", "epf_rate_pct", "epf_salary_growth_pct"] as const;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       payload[k] = v === null || v === "" ? null : Number(v);
     }
   }
+
+  if ("is_salaried" in body) payload.is_salaried = body.is_salaried === true || body.is_salaried === "true";
 
   const { error } = await supabase
     .from("financial_facts")

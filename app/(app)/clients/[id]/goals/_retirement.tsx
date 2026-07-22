@@ -28,6 +28,15 @@ export interface RetirementBase {
   defReplacementPct: number;
   defPostRet: number;
   defPostRetInflation: number;
+  salaried: boolean;
+  epfBasicSalary: number;
+  epfEmployeePct: number;
+  epfEmployerPct: number;
+  epfBalance: number;
+  epfRatePct: number;
+  epfSalaryGrowthPct: number;
+  defEpfRate: number;
+  defSalaryGrowth: number;
 }
 
 function NumField({ label, unit, value, onChange, step = 1, hint }: {
@@ -72,17 +81,34 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
   const [pension, setPension]             = useState(base.monthlyPensionNow);
   const [corpus, setCorpus]               = useState(base.existingCorpus);
   const [existingSip, setExistingSip]     = useState(base.existingMonthlySip);
+  const [salaried, setSalaried]           = useState(base.salaried);
+  const [epfBasic, setEpfBasic]           = useState(base.epfBasicSalary);
+  const [epfEmpPct, setEpfEmpPct]         = useState(base.epfEmployeePct);
+  const [epfEmprPct, setEpfEmprPct]       = useState(base.epfEmployerPct);
+  const [epfBalance, setEpfBalance]       = useState(base.epfBalance);
+  const [epfRate, setEpfRate]             = useState(base.epfRatePct);
+  const [salaryGrowth, setSalaryGrowth]   = useState(base.epfSalaryGrowthPct);
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
 
+  const epfContribution = Math.round(epfBasic * (epfEmpPct + epfEmprPct) / 100);
   const inp: RetirementInput = useMemo(() => ({
     currentAge, retirementAge, lifeExpectancy,
     currentMonthlyExpense: curExpense, replacementPct: replacement,
     preRetInflationPct: preInfl, postRetInflationPct: postInfl,
     accumulationReturnPct: accReturn, postRetReturnPct: postRet,
     monthlyPensionNow: pension, existingCorpus: corpus, existingMonthlySip: existingSip,
-  }), [currentAge, retirementAge, lifeExpectancy, curExpense, replacement, preInfl, postInfl, accReturn, postRet, pension, corpus, existingSip]);
+    salaried, epfBalance, epfMonthlyContribution: epfContribution,
+    epfRatePct: epfRate, epfSalaryGrowthPct: salaryGrowth,
+  }), [currentAge, retirementAge, lifeExpectancy, curExpense, replacement, preInfl, postInfl, accReturn, postRet, pension, corpus, existingSip, salaried, epfBalance, epfContribution, epfRate, salaryGrowth]);
+
+  // Toggling salaried moves the corpus between the EPF and non-EPF buckets so no money is lost.
+  const toggleSalaried = () => {
+    if (salaried) { setCorpus(corpus + epfBalance); setEpfBalance(0); setSalaried(false); }
+    else { setEpfBalance(epfBalance + corpus); setCorpus(0); setSalaried(true); }
+    setSaved(false);
+  };
 
   const r = useMemo(() => retirementCorpus(inp), [inp]);
 
@@ -102,6 +128,12 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
         retirement_replacement_pct: replacement,
         retirement_age: Math.round(retirementAge),
         ret_pension: pension,
+        is_salaried: salaried,
+        epf_basic_salary: epfBasic,
+        epf_employee_pct: epfEmpPct,
+        epf_employer_pct: epfEmprPct,
+        epf_rate_pct: epfRate,
+        epf_salary_growth_pct: salaryGrowth,
       }),
     });
     setSaving(false);
@@ -169,9 +201,34 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
           <div>
             <div className="text-[11px] font-semibold text-[#175A69] uppercase tracking-wide mb-2">Already earmarked</div>
             <div className="grid grid-cols-2 gap-3">
-              <NumField label="Existing corpus" unit="₹" value={corpus} onChange={setCorpus} step={100000} hint="EPF / NPS / saved" />
+              <NumField label={salaried ? "Other corpus (non-EPF)" : "Existing corpus"} unit="₹" value={corpus} onChange={setCorpus} step={100000} hint={salaried ? "mutual funds / other savings" : "EPF / NPS / saved"} />
               <NumField label="Ongoing SIP" unit="₹/mo" value={existingSip} onChange={setExistingSip} step={1000} />
             </div>
+          </div>
+
+          {/* EPF — salaried only */}
+          <div className="bg-[#F5F9FA] border border-[#CBD9DC] rounded-lg p-3">
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-[11px] font-semibold text-[#175A69] uppercase tracking-wide">EPF (salaried)</span>
+              <span className="relative inline-flex items-center">
+                <input type="checkbox" checked={salaried} onChange={toggleSalaried} className="sr-only peer" />
+                <span className="w-9 h-5 bg-[#CBD9DC] peer-checked:bg-[#175A69] rounded-full transition-colors"></span>
+                <span className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></span>
+              </span>
+            </label>
+            {salaried && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <NumField label="Monthly basic pay" unit="₹" value={epfBasic} onChange={setEpfBasic} step={1000} />
+                <NumField label="EPF balance now" unit="₹" value={epfBalance} onChange={setEpfBalance} step={100000} hint="current passbook balance" />
+                <NumField label="Employee share" unit="%" value={epfEmpPct} onChange={setEpfEmpPct} step={0.01} />
+                <NumField label="Employer share" unit="%" value={epfEmprPct} onChange={setEpfEmprPct} step={0.01} hint="8.33% of the 12% funds EPS pension" />
+                <NumField label="EPF interest" unit="%" value={epfRate} onChange={setEpfRate} step={0.05} hint={`default ${base.defEpfRate}%`} />
+                <NumField label="Salary growth" unit="%" value={salaryGrowth} onChange={setSalaryGrowth} step={0.5} hint={`default ${base.defSalaryGrowth}%`} />
+                <div className="col-span-2 text-[10px] text-[#175A69] bg-white border border-[#CBD9DC] rounded px-2 py-1">
+                  Contribution ≈ <strong>{fmt0(epfContribution)}/mo</strong> (employee + employer) → grows {salaryGrowth}% p.a., earns {epfRate}% p.a.
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -199,7 +256,7 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
             <div className="bg-[#F5F9FA] border border-[#CBD9DC] rounded-lg p-3">
               <div className="text-[11px] text-[#6B7E86] mb-1">Projected by retirement</div>
               <div className="font-bold text-[#0F3A46]">{fmtCr(r.projectedCorpus)}</div>
-              <div className="text-[10px] text-[#6B7E86] mt-1">corpus + SIP grown</div>
+              <div className="text-[10px] text-[#6B7E86] mt-1">{salaried ? "corpus + SIP + EPF grown" : "corpus + SIP grown"}</div>
             </div>
             <div className="rounded-lg p-3 border" style={{ background: r.shortfall > 0 ? "#FFF7F6" : "#E4F1EA", borderColor: r.shortfall > 0 ? "#E4B3AE" : "#B3D9C3" }}>
               <div className="text-[11px] text-[#6B7E86] mb-1">Shortfall</div>
@@ -237,6 +294,7 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
             <Row k={`Real return (1+${postRet}%)/(1+${postInfl}%) − 1`} v={`${r.realRatePct}% p.a.`} />
             <Row k="Months in retirement (nper)" v={`${r.retirementMonths}`} />
             <Row strong k={`Corpus = PV(${r.realRatePct}%/12, ${r.retirementMonths}, ${fmt0(r.netMonthlyExpenseAtRetirement)})`} v={fmtCr(r.corpusRequired)} />
+            {salaried && <Row k={`EPF corpus by retirement (contrib ${fmt0(epfContribution)}/mo, grows ${salaryGrowth}%, earns ${epfRate}%)`} v={fmtCr(r.epfCorpusAtRetirement)} />}
           </div>
 
           {/* Drawdown depletion curve */}
