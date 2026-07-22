@@ -68,8 +68,8 @@ export default async function PreferencesPage({ params }: { params: Promise<{ id
   const f = facts ?? ({} as Record<string, string | null>);
 
   // Style pref options
-  const STYLES = ["Growth", "Income", "Capital preservation", "Balanced"];
-  const ESG = ["Yes", "No", "No strong preference"];
+  const STYLES = ["Growth", "Income", "Preservation", "Balanced"];
+  const ESG = ["Yes", "No", "No preference"];
   const INTL = ["Yes", "No", "Not sure"];
 
   return (

@@ -18,7 +18,7 @@ export default async function FamilyPage({ params }: { params: Promise<{ id: str
 
   const [{ data: client, error }, { data: members }, { data: knowledge }] = await Promise.all([
     supabase.from("clients").select("full_name").eq("client_id", id).single(),
-    supabase.from("family_members").select("*").eq("client_id", id).order("id"),
+    supabase.from("family_members").select("*").eq("client_id", id).order("fam_id"),
     supabase.from("knowledge_grid").select("*").eq("client_id", id),
   ]);
 

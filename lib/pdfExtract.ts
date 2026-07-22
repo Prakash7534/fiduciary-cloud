@@ -215,7 +215,7 @@ export function mapToFinancialFacts(m: RawFields) {
       ["style_growth","Growth"],["style_income","Income"],
       ["style_capital","Capital preservation"],["style_balanced","Balanced"],
     ]),
-    esg_pref:  pick(m, [["esg_yes","Yes"],["esg_no","No"],["esg_neutral","No strong preference"]]),
+    esg_pref:  pick(m, [["esg_yes","Yes"],["esg_no","No"],["esg_noprf","No preference"]]),
     intl_pref: pick(m, [["intl_yes","Yes"],["intl_no","No"],["intl_notsure","Not sure"]]),
     sector_pref: (m["sector_pref"] as string) ?? null,
     // G9 — estate planning
