@@ -5,7 +5,7 @@ import { goalCalc, profileFromAnswers, type GoalRow, type RiskAnswer } from "@/l
 import { BASE_ALLOCATION, goalExpectedReturn } from "@/lib/allocationEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import { resolveAssumptions } from "@/lib/assumptions";
-import RetirementPlanner from "./_retirement";
+import GoalsSummary from "./_summary";
 import { retirementCorpus } from "@/lib/retirement";
 
 const THIS_YEAR = new Date().getFullYear();
@@ -159,8 +159,11 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
       };
     }
   }
-  const totalExtraSip   = calcs.reduce((s, { c }) => s + c.extraSip, 0);
-  const totalLumpsumNow = calcs.reduce((s, x) => s + x.lumpsumNow, 0);
+  const retGoalId = retGoal?.goal_id;
+  const otherExtraSip = calcs.reduce((s, x) => s + (x.g.goal_id === retGoalId ? 0 : x.c.extraSip), 0);
+  const otherLumpsum  = calcs.reduce((s, x) => s + (x.g.goal_id === retGoalId ? 0 : x.lumpsumNow), 0);
+  const initialRetSip     = retResult?.requiredMonthlySip ?? 0;
+  const initialRetLumpsum = retResult?.requiredLumpsumToday ?? 0;
 
   const FUNDED_COLOR  = "#2E7D5B";
   const PARTIAL_COLOR = "#C39A38";
@@ -169,34 +172,10 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   return (
     <div className="space-y-5">
 
-      {/* Summary header */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white border border-[#CBD9DC] rounded-xl p-4">
-          <div className="text-xs text-[#6B7E86] mb-1">Goals on record</div>
-          <div className="text-3xl font-bold font-serif text-[#0F3A46]">{goals.length}</div>
-        </div>
-        <div className="bg-white border border-[#CBD9DC] rounded-xl p-4">
-          <div className="text-xs text-[#6B7E86] mb-1">Live portfolio counted</div>
-          <div className="font-bold text-[#0F3A46]">{totalLiveValue > 0 ? fmtCr(totalLiveValue) : "—"}</div>
-          <div className="text-[10px] text-[#6B7E86] mt-0.5">{totalLiveSip > 0 ? "+ " + fmtCr(totalLiveSip) + "/mo executed SIP" : "no executed positions yet"}</div>
-        </div>
-        <div className={`border rounded-xl p-4 ${totalExtraSip > 0 ? "bg-[#FFF7F6] border-[#E4B3AE]" : "bg-[#E4F1EA] border-[#B3D9C3]"}`}>
-          <div className="text-xs text-[#6B7E86] mb-1">Additional SIP needed across all goals</div>
-          <div className={`font-bold ${totalExtraSip > 0 ? "text-[#B4463C]" : "text-[#2E7D5B]"}`}>
-            {totalExtraSip > 0 ? fmtCr(totalExtraSip) + "/mo" : "All goals on track ✓"}
-          </div>
-        </div>
-        <div className={`border rounded-xl p-4 ${totalLumpsumNow > 0 ? "bg-[#FFFBF2] border-[#E3D3A8]" : "bg-[#E4F1EA] border-[#B3D9C3]"}`}>
-          <div className="text-xs text-[#6B7E86] mb-1">OR one-time lumpsum today (all goals)</div>
-          <div className={`font-bold ${totalLumpsumNow > 0 ? "text-[#8A6D1C]" : "text-[#2E7D5B]"}`}>
-            {totalLumpsumNow > 0 ? fmtCr(totalLumpsumNow) : "Nothing needed ✓"}
-          </div>
-          <div className="text-[10px] text-[#6B7E86] mt-0.5">invest now instead of extra SIP</div>
-        </div>
-      </div>
-
-      {/* Retirement corpus planner — settable life expectancy, drawdown model */}
-      <RetirementPlanner clientId={id} base={retirementBase} />
+      <GoalsSummary clientId={id} base={retirementBase}
+        goalsCount={goals.length} totalLiveValue={totalLiveValue} totalLiveSip={totalLiveSip}
+        otherExtraSip={otherExtraSip} otherLumpsum={otherLumpsum}
+        hasRetGoal={!!retGoal} initialRetSip={initialRetSip} initialRetLumpsum={initialRetLumpsum} />
 
       {goals.length === 0 ? (
         <div className="bg-white border border-[#CBD9DC] rounded-xl p-8 text-center">

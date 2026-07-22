@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { retirementCorpus, type RetirementInput } from "@/lib/retirement";
 
@@ -66,7 +66,7 @@ function Row({ k, v, strong }: { k: React.ReactNode; v: React.ReactNode; strong?
   );
 }
 
-export default function RetirementPlanner({ clientId, base }: { clientId: string; base: RetirementBase }) {
+export default function RetirementPlanner({ clientId, base, onResult }: { clientId: string; base: RetirementBase; onResult?: (sip: number, lumpsum: number) => void }) {
   const router = useRouter();
 
   const [currentAge, setCurrentAge]       = useState(base.currentAge);
@@ -111,6 +111,7 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
   };
 
   const r = useMemo(() => retirementCorpus(inp), [inp]);
+  useEffect(() => { onResult?.(r.requiredMonthlySip, r.requiredLumpsumToday); }, [r.requiredMonthlySip, r.requiredLumpsumToday, onResult]);
 
   const sens = useMemo(() => {
     const ages = [75, 80, 85, 90, 95, 100].filter(a => a > retirementAge);
