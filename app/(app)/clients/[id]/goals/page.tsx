@@ -7,6 +7,7 @@ import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import { resolveAssumptions } from "@/lib/assumptions";
 import GoalsSummary from "./_summary";
 import { retirementCorpus } from "@/lib/retirement";
+import { buildRetirementInput, isRetirementGoal } from "@/lib/retirementInput";
 
 const THIS_YEAR = new Date().getFullYear();
 
@@ -82,54 +83,16 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     return { g: gLive, c, gret, lumpsumNow: Math.round(lumpsumNow), liveSaved: Math.round(liveSaved), liveSip: Math.round(liveSip),
       ret: null as null | { expToday: number; retAge: number; life: number; realRate: number; existingCorpus: number; existingSip: number } };
   });
-  // ── Retirement corpus planner inputs (drawdown model) ─────────────────────
-  const dob = client.dob ? new Date(client.dob as string) : null;
-  const _now = new Date();
-  let currentAge = 35;
-  if (dob && !Number.isNaN(dob.getTime())) {
-    currentAge = _now.getFullYear() - dob.getFullYear() - (_now < new Date(_now.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0);
-  }
-  const retirementAge = Number(facts?.retirement_age ?? 60);
-  const lifeExpectancy = Number(facts?.life_expectancy ?? A.lifeExpectancy);
-  const impliedRepl = facts?.ret_expenses && facts?.expenses_annual
-    ? Math.round((Number(facts.ret_expenses) * 12) / Number(facts.expenses_annual) * 100) : null;
-  const replacementPct = facts?.retirement_replacement_pct != null
-    ? Number(facts.retirement_replacement_pct)
-    : (impliedRepl != null && impliedRepl >= 30 && impliedRepl <= 130 ? impliedRepl : A.replacementPct);
-  const retYear = THIS_YEAR + Math.max(0, retirementAge - currentAge);
-  const accReturn = goalExpectedReturn(retYear, saa, A, THIS_YEAR);
-  const retGoal = goals.find(g => /retire/i.test(g.goal_name ?? ""));
-  const retLive = retGoal ? (liveByGoal[retGoal.goal_id] ?? { liveSaved: 0, liveSip: 0 }) : { liveSaved: 0, liveSip: 0 };
-  const existingRetSip = retGoal ? (retGoal.monthly_sip ?? 0) + retLive.liveSip : 0;
-  // EPF (salaried only). The captured EPF/NPS figure is treated as the current
-  // EPF balance (grown at the EPF rate); non-salaried keep it as ordinary corpus.
-  const salaried = facts?.is_salaried === true;
-  const epfBasicSalary = Number(facts?.epf_basic_salary ?? 0);
-  const epfEmployeePct = facts?.epf_employee_pct != null ? Number(facts.epf_employee_pct) : 12;
-  const epfEmployerPct = facts?.epf_employer_pct != null ? Number(facts.epf_employer_pct) : 12;
-  const epfRatePct = facts?.epf_rate_pct != null ? Number(facts.epf_rate_pct) : A.epfRate;
-  const epfSalaryGrowthPct = facts?.epf_salary_growth_pct != null ? Number(facts.epf_salary_growth_pct) : A.salaryGrowth;
-  const epfNps = Number(facts?.epf_nps_corpus ?? 0);
-  const epfBalance = salaried ? epfNps : 0;
-  const nonEpfCorpus = salaried ? 0 : epfNps;
+  // ── Retirement corpus (drawdown + EPF) — shared builder so the Goal
+  //     Calculator, Asset Allocation and Portfolio Construction all agree ─────
+  const retGoal = goals.find(isRetirementGoal);
+  const retLiveSip = retGoal ? (liveByGoal[retGoal.goal_id]?.liveSip ?? 0) : 0;
+  const retInput = buildRetirementInput(facts as Record<string, unknown> | null, (client.dob as string | null) ?? null, goals, retLiveSip, saa, A, THIS_YEAR);
   const retirementBase = {
-    currentAge, retirementAge, lifeExpectancy,
-    currentMonthlyExpense: Math.round(expenses),
-    replacementPct,
-    preRetInflationPct: A.inflation,
-    postRetInflationPct: A.postRetInflation,
-    accumulationReturnPct: Math.round(accReturn * 10) / 10,
-    postRetReturnPct: A.postRetReturn,
-    pensionAtRetirement: Number(facts?.ret_pension ?? 0),
-    existingCorpus: nonEpfCorpus,
-    existingMonthlySip: Math.round(existingRetSip),
-    salaried,
-    epfBasicSalary,
-    epfEmployeePct,
-    epfEmployerPct,
-    epfBalance,
-    epfRatePct,
-    epfSalaryGrowthPct,
+    ...retInput,
+    epfBasicSalary: Number(facts?.epf_basic_salary ?? 0),
+    epfEmployeePct: facts?.epf_employee_pct != null ? Number(facts.epf_employee_pct) : 12,
+    epfEmployerPct: facts?.epf_employer_pct != null ? Number(facts.epf_employer_pct) : 12,
     defLifeExpectancy: A.lifeExpectancy,
     defReplacementPct: A.replacementPct,
     defPostRet: A.postRetReturn,
@@ -138,11 +101,9 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     defSalaryGrowth: A.salaryGrowth,
   };
 
-  // Align the Retirement goal with the drawdown corpus: its future value, gap,
-  // required SIP and lumpsum all come from the PV model so the goal card and the
-  // aggregate totals match the Retirement planner above (single source of truth).
-  const epfMonthlyContribution = Math.round(epfBasicSalary * (epfEmployeePct + epfEmployerPct) / 100);
-  const retResult = retGoal ? retirementCorpus({ ...retirementBase, epfMonthlyContribution }) : null;
+  // Align the Retirement goal with the drawdown corpus so the goal totals match
+  // the planner and the other pages (single source of truth).
+  const retResult = retGoal ? retirementCorpus(retInput) : null;
   if (retGoal && retResult) {
     const e = calcs.find(x => x.g.goal_id === retGoal.goal_id);
     if (e) {
@@ -154,7 +115,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
       e.lumpsumNow = retResult.requiredLumpsumToday;
       e.ret = {
         expToday: retResult.retExpenseMonthlyToday,
-        retAge: retirementAge, life: lifeExpectancy, realRate: retResult.realRatePct,
+        retAge: retInput.retirementAge, life: retInput.lifeExpectancy, realRate: retResult.realRatePct,
         existingCorpus: retirementBase.existingCorpus, existingSip: retirementBase.existingMonthlySip,
       };
     }

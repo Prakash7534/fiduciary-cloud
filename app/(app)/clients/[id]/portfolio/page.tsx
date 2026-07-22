@@ -28,7 +28,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
       .eq("client_id", id).single(),
     supabase.from("risk_answers").select("question_num, answer").eq("client_id", id),
     supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
-    supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
+    supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual, retirement_age, life_expectancy, ret_pension, epf_nps_corpus, ret_expenses, retirement_replacement_pct, is_salaried, epf_basic_salary, epf_employee_pct, epf_employer_pct, epf_rate_pct, epf_salary_growth_pct").eq("client_id", id).maybeSingle(),
     supabase.from("investment_universe").select("*").order("asset_class").order("category"),
     supabase.from("portfolio_positions").select("*").eq("client_id", id).order("created_at"),
     supabase.from("portfolio_holdings").select("*").eq("client_id", id).order("added_at"),
@@ -69,7 +69,7 @@ export default async function PortfolioPage({ params }: { params: Promise<{ id: 
   // Reconcile the goal SIP with the Goal Calculator / Asset Allocation (shared
   // live-portfolio-aware, SAA-blended calculation — lib/goalSip.ts).
   const saaMap = overrideAlloc ?? BASE_ALLOCATION[saaProfile] ?? {};
-  plan.totalMonthlySIP = totalRequiredSip(goals as unknown as GoalRow[], (positions ?? []) as Record<string, unknown>[], (holdings ?? []) as Record<string, unknown>[], saaMap, A);
+  plan.totalMonthlySIP = totalRequiredSip(goals as unknown as GoalRow[], (positions ?? []) as Record<string, unknown>[], (holdings ?? []) as Record<string, unknown>[], saaMap, A, new Date().getFullYear(), facts as Record<string, unknown> | null, (client.dob as string | null) ?? null);
   plan.surplusAfterSIP = Math.round(plan.monthlySurplus - plan.totalMonthlySIP);
 
   return (

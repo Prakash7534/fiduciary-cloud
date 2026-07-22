@@ -25,7 +25,7 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
     supabase.from("clients").select("full_name, dob, risk_override, allocation_overrides").eq("client_id", id).single(),
     supabase.from("risk_answers").select("question_num, answer").eq("client_id", id),
     supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
-    supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
+    supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual, retirement_age, life_expectancy, ret_pension, epf_nps_corpus, ret_expenses, retirement_replacement_pct, is_salaried, epf_basic_salary, epf_employee_pct, epf_employer_pct, epf_rate_pct, epf_salary_growth_pct").eq("client_id", id).maybeSingle(),
     supabase.from("investment_universe").select("instrument_id, asset_class, category, return_3y, return_5y, expense_ratio").order("asset_class"),
     supabase.from("portfolio_positions").select("goal_id, status, executed_lumpsum, executed_sip, current_value, executed_at").eq("client_id", id),
     supabase.from("portfolio_holdings").select("current_value, lumpsum_invested, monthly_sip, added_at").eq("client_id", id),
@@ -69,7 +69,7 @@ export default async function AssetAllocPage({ params }: { params: Promise<{ id:
   // live-portfolio-aware, SAA-blended calculation (lib/goalSip.ts) so the figure
   // matches across Goal Calculator, Asset Allocation and Portfolio Construction.
   const saa = overrideAlloc ?? BASE_ALLOCATION[saaProfile] ?? {};
-  plan.totalMonthlySIP = totalRequiredSip(goals as unknown as GoalRow[], (positions ?? []) as Record<string, unknown>[], (holdings ?? []) as Record<string, unknown>[], saa, A);
+  plan.totalMonthlySIP = totalRequiredSip(goals as unknown as GoalRow[], (positions ?? []) as Record<string, unknown>[], (holdings ?? []) as Record<string, unknown>[], saa, A, new Date().getFullYear(), facts as Record<string, unknown> | null, (client.dob as string | null) ?? null);
   plan.surplusAfterSIP = Math.round(plan.monthlySurplus - plan.totalMonthlySIP);
 
   // Engine (non-override) allocation, for the "Reset to engine" button.
