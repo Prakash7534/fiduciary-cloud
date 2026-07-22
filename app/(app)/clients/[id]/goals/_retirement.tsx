@@ -313,7 +313,7 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
             {salaried && <Row k={`EPF corpus by retirement (contrib ${fmt0(epfContribution)}/mo, grows ${salaryGrowth}%, earns ${epfRate}%)`} v={fmtCr(r.epfCorpusAtRetirement)} />}
           </div>
 
-          {/* Drawdown depletion curve */}
+          {/* Drawdown depletion curve + year-by-year schedule */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <div className="text-[11px] font-semibold text-[#175A69] uppercase tracking-wide">
@@ -326,15 +326,48 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
             <svg viewBox={`0 0 ${Math.max(1, r.depletion.length) * 10} 60`} preserveAspectRatio="none" className="w-full h-16 bg-[#F5F9FA] rounded-lg border border-[#E7EFEF]">
               {r.depletion.map((d, i) => {
                 const h = (d.corpusStart / depMax) * 56;
-                return <rect key={i} x={i * 10 + 1} y={58 - h} width={8} height={Math.max(0.5, h)}
-                  fill={d.corpusStart > 0 ? "#175A69" : "#E4B3AE"} rx={1} />;
+                return (
+                  <rect key={i} x={i * 10 + 1} y={58 - h} width={8} height={Math.max(0.5, h)}
+                    fill={d.corpusStart > 0 ? "#175A69" : "#E4B3AE"} rx={1}>
+                    <title>{`Age ${d.age}: balance ${fmtCr(d.corpusStart)} · draws ${fmt0(d.withdrawal)}/yr (${fmt0(Math.round(d.withdrawal / 12))}/mo)`}</title>
+                  </rect>
+                );
               })}
             </svg>
             <div className="flex justify-between text-[10px] text-[#6B7E86] mt-0.5">
               <span>age {retirementAge}</span>
-              <span>corpus is drawn down as inflation raises each year&apos;s withdrawal</span>
+              <span>withdrawals rise {postInfl}% p.a.; balance earns {postRet}% p.a.</span>
               <span>age {lifeExpectancy}</span>
             </div>
+
+            {/* Year-by-year schedule */}
+            <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-[#E7EFEF]">
+              <table className="w-full text-[11px] border-collapse">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-[#0F3A46] text-[#A9CDD4]">
+                    <th className="text-left px-2 py-1 font-medium">Age</th>
+                    <th className="text-right px-2 py-1 font-medium">Drawn /mo</th>
+                    <th className="text-right px-2 py-1 font-medium">Drawn /yr</th>
+                    <th className="text-right px-2 py-1 font-medium">Corpus balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {r.depletion.map((d, i) => (
+                    <tr key={i} className={i % 2 ? "bg-white" : "bg-[#FAFCFC]"}>
+                      <td className="px-2 py-0.5 text-[#0F3A46]">{d.age}</td>
+                      <td className="px-2 py-0.5 text-right text-[#334E56]">{fmt0(Math.round(d.withdrawal / 12))}</td>
+                      <td className="px-2 py-0.5 text-right text-[#334E56]">{fmt0(d.withdrawal)}</td>
+                      <td className="px-2 py-0.5 text-right font-medium" style={{ color: d.corpusStart > 0 ? "#0F3A46" : "#B4463C" }}>
+                        {d.corpusStart > 0 ? fmtCr(d.corpusStart) : "depleted"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[10px] text-[#6B7E86] mt-1">
+              Each year&apos;s withdrawal is the retirement expense{hasPension ? " (net of pension)" : ""} grown at {postInfl}% inflation; the remaining corpus keeps earning {postRet}% p.a. until age {lifeExpectancy}.
+            </p>
           </div>
 
           {/* Life-expectancy sensitivity */}

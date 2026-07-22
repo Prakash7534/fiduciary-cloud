@@ -52,7 +52,7 @@ export interface RetirementResult {
   requiredLumpsumToday: number;             // alternative one-off today
   fundedPct: number;
   surplus: number;                          // projected − required (positive = over-funded)
-  depletion: { age: number; corpusStart: number }[];
+  depletion: { age: number; corpusStart: number; withdrawal: number }[];
   runsOutAtAge: number | null;              // only when under-funded
 }
 
@@ -119,12 +119,12 @@ export function retirementCorpus(inp: RetirementInput): RetirementResult {
   // actually projected to have (so "runs out at age X" is real); when funded
   // we drain the required corpus, which by construction lasts to life expectancy.
   const startBal = shortfall > 0 ? projected : corpus;
-  const depletion: { age: number; corpusStart: number }[] = [];
+  const depletion: { age: number; corpusStart: number; withdrawal: number }[] = [];
   let bal = startBal;
   let runsOut: number | null = null;
   for (let t = 0; t < nYears; t++) {
-    depletion.push({ age: inp.retirementAge + t, corpusStart: Math.max(0, round(bal)) });
     const annualWithdrawal = netMonthly * 12 * Math.pow(1 + iPost, t);
+    depletion.push({ age: inp.retirementAge + t, corpusStart: Math.max(0, round(bal)), withdrawal: round(annualWithdrawal) });
     bal = (bal - annualWithdrawal) * (1 + rDraw);
     if (shortfall > 0 && bal < 0 && runsOut === null) runsOut = inp.retirementAge + t + 1;
   }
