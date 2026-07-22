@@ -137,6 +137,7 @@ export function mapToFinancialFacts(m: RawFields) {
     life_expectancy:      num(m["life_expectancy"]),
     is_salaried:          !!m["is_salaried"],
     epf_basic_salary:     num(m["epf_basic_salary"]),
+    epf_salary_growth_pct: num(m["epf_salary_growth_pct"]),
     income_growth_pct:    (m["income_growth_pct"] as string) ?? null,
     large_inflows:        (m["large_inflows"] as string) ?? null,
     large_expenses:       (m["large_expenses"] as string) ?? null,

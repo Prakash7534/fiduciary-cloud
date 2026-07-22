@@ -305,6 +305,7 @@ export async function GET(
   txt(form, "retage_self", cl.retirement_age ? String(cl.retirement_age) : (ff?.retirement_age ? String(ff.retirement_age) : ""));
   txt(form, "life_expectancy", ff?.life_expectancy ? String(ff.life_expectancy) : "");
   txt(form, "epf_basic_salary", ff?.epf_basic_salary ? String(ff.epf_basic_salary) : "");
+  txt(form, "epf_salary_growth_pct", ff?.epf_salary_growth_pct ? String(ff.epf_salary_growth_pct) : "");
   chk(form, "is_salaried", ff?.is_salaried === true);
   txt(form, "income_growth_pct", ff?.income_growth_pct ? String(ff.income_growth_pct) : "");
 

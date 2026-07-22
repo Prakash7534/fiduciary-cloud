@@ -231,6 +231,8 @@ export default async function BlankFormPage({ params }: { params: Promise<{ id: 
             <Line label="Planned life expectancy (age)" />
             <Line label="Salaried? (EPF applies)" />
             <Line label="Monthly basic pay (₹)" />
+            <Line label="Average salary growth (% p.a.)" />
+            <Line label="Current EPF / NPS balance now (₹)" />
           </TwoCol>
           <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 8 }}>
             {[

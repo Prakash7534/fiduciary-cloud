@@ -206,6 +206,7 @@ export async function POST(
     const ra = num(getField("retage_from_b6")) ?? num(getField("retage_self")); if (ra != null) ff.retirement_age = Math.round(ra);
     const le = num(getField("life_expectancy")); if (le != null) ff.life_expectancy = Math.round(le);
     const bp = num(getField("epf_basic_salary")); if (bp != null) ff.epf_basic_salary = bp;
+    const sg = num(getField("epf_salary_growth_pct")); if (sg != null) ff.epf_salary_growth_pct = sg;
     if (isChecked("is_salaried")) ff.is_salaried = true;
     ftext("var_pay","var_pay"); ftext("prop_count","prop_count"); ftext("property_plan","property_plan");
     ftext("income_growth_pct","income_growth_pct"); ftext("large_inflows","large_inflows"); ftext("large_expenses","large_expenses");
