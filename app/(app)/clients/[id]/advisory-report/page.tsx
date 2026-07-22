@@ -8,6 +8,8 @@ import { buildGapPlan, currentValueByClass } from "@/lib/constructionEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import AdvisoryReportClient from "./_client";
 import { resolveAssumptions } from "@/lib/assumptions";
+import { retirementCorpus } from "@/lib/retirement";
+import { buildRetirementInput, isRetirementGoal } from "@/lib/retirementInput";
 
 const THIS_YEAR = new Date().getFullYear();
 
@@ -140,6 +142,40 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
     };
   });
 
+  // Retirement goal sized by the drawdown + EPF engine (consistent with the
+  // Goal Calculator, Asset Allocation and Portfolio Construction).
+  const retGoal = goals.find(isRetirementGoal);
+  const retLiveSip = retGoal ? (liveByGoal[retGoal.goal_id]?.liveSip ?? 0) : 0;
+  const retInput = buildRetirementInput(facts as Record<string, unknown> | null, (client.dob as string | null) ?? null, goals, retLiveSip, saa, A, THIS_YEAR);
+  const retResult = retGoal ? retirementCorpus(retInput) : null;
+  if (retGoal && retResult) {
+    const gr = goalRows.find(r => isRetirementGoal({ goal_name: r.goal_name }));
+    if (gr) {
+      gr.fv = retResult.corpusRequired;
+      gr.projected = retResult.projectedCorpus;
+      gr.gap = retResult.shortfall;
+      gr.extraSip = retResult.requiredMonthlySip;
+      gr.lumpsumNow = retResult.requiredLumpsumToday;
+      gr.fundedPct = retResult.fundedPct > 100 ? 100 : retResult.fundedPct;
+    }
+  }
+  const retirement = retResult ? {
+    currentAge: retInput.currentAge, retirementAge: retInput.retirementAge, lifeExpectancy: retInput.lifeExpectancy,
+    retirementYears: retResult.retirementYears,
+    currentMonthlyExpense: retInput.currentMonthlyExpense, replacementPct: retInput.replacementPct,
+    retExpenseMonthlyToday: retResult.retExpenseMonthlyToday, monthlyExpenseAtRetirement: retResult.monthlyExpenseAtRetirement,
+    pensionAtRetirement: retResult.monthlyPensionAtRetirement, netMonthlyExpenseAtRetirement: retResult.netMonthlyExpenseAtRetirement,
+    realRatePct: retResult.realRatePct, corpusRequired: retResult.corpusRequired, projectedCorpus: retResult.projectedCorpus,
+    epfCorpusAtRetirement: retResult.epfCorpusAtRetirement, shortfall: retResult.shortfall, surplus: retResult.surplus,
+    fundedPct: retResult.fundedPct, requiredMonthlySip: retResult.requiredMonthlySip, requiredLumpsumToday: retResult.requiredLumpsumToday,
+    salaried: retInput.salaried, epfMonthlyContribution: retInput.epfMonthlyContribution, epfBalance: retInput.epfBalance,
+    epfRatePct: retInput.epfRatePct, epfSalaryGrowthPct: retInput.epfSalaryGrowthPct,
+    existingCorpus: retInput.existingCorpus, existingMonthlySip: retInput.existingMonthlySip,
+    preRetInflationPct: retInput.preRetInflationPct, postRetInflationPct: retInput.postRetInflationPct,
+    accumulationReturnPct: retInput.accumulationReturnPct, postRetReturnPct: retInput.postRetReturnPct,
+    runsOutAtAge: retResult.runsOutAtAge, depletion: retResult.depletion,
+  } : null;
+
   const totalExtraSip   = goalRows.reduce((s, g) => s + g.extraSip, 0);
   const totalLumpsumNow = goalRows.reduce((s, g) => s + g.lumpsumNow, 0);
 
@@ -220,7 +256,7 @@ export default async function AdvisoryReportPage({ params }: { params: Promise<{
     })),
     totalCurrent: Math.round(gapPlan.totalCurrent),
     assetOverlap: Math.round(assetOverlap),
-    goalRows, totalExtraSip, totalLumpsumNow,
+    goalRows, totalExtraSip, totalLumpsumNow, retirement,
     positions: proposedPositions,
     notes: {
       what_it_means: notes?.what_it_means ?? "", why_this_mix: notes?.why_this_mix ?? "",

@@ -35,6 +35,18 @@ interface ReportData {
   totalCurrent: number;
   assetOverlap: number;
   goalRows: GoalRowD[]; totalExtraSip: number; totalLumpsumNow: number;
+  retirement: {
+    currentAge: number; retirementAge: number; lifeExpectancy: number; retirementYears: number;
+    currentMonthlyExpense: number; replacementPct: number; retExpenseMonthlyToday: number;
+    monthlyExpenseAtRetirement: number; pensionAtRetirement: number; netMonthlyExpenseAtRetirement: number;
+    realRatePct: number; corpusRequired: number; projectedCorpus: number; epfCorpusAtRetirement: number;
+    shortfall: number; surplus: number; fundedPct: number; requiredMonthlySip: number; requiredLumpsumToday: number;
+    salaried: boolean; epfMonthlyContribution: number; epfBalance: number; epfRatePct: number; epfSalaryGrowthPct: number;
+    existingCorpus: number; existingMonthlySip: number;
+    preRetInflationPct: number; postRetInflationPct: number; accumulationReturnPct: number; postRetReturnPct: number;
+    runsOutAtAge: number | null;
+    depletion: { age: number; corpusStart: number; withdrawal: number }[];
+  } | null;
   positions: PositionD[];
   notes: { what_it_means: string; why_this_mix: string; deployment_plan: string;
     conflicts: string; additional_comments: string; next_review_date: string;
@@ -679,6 +691,84 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
         </Section>
 
         {/* 7 · Asset allocation */}
+        {d.retirement && (() => { const R = d.retirement!; return (
+        <Section num="7A" title="RETIREMENT CORPUS ANALYSIS — inflation-adjusted drawdown">
+          <p className="text-[11px] text-[#334E56] mb-3">
+            The corpus is sized to fund post-retirement living expenses — which keep rising with inflation — from age {R.retirementAge} to a planning life expectancy of {R.lifeExpectancy} ({R.retirementYears} years), net of pension and other retirement income. Method: present value of the inflation-linked monthly withdrawal at a real return of {R.realRatePct}% p.a. (post-retirement return net of post-retirement inflation).
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div className="bg-[#0F3A46] text-white rounded p-2.5">
+              <div className="text-[9px] text-[#A9CDD4]">Corpus required @ {R.retirementAge}</div>
+              <div className="text-base font-bold font-serif">{fmt(R.corpusRequired)}</div>
+            </div>
+            <div className="bg-[#F5F9FA] border border-[#CBD9DC] rounded p-2.5">
+              <div className="text-[9px] text-[#6B7E86]">Projected by retirement</div>
+              <div className="text-sm font-bold text-[#0F3A46]">{fmt(R.projectedCorpus)}</div>
+            </div>
+            <div className="rounded p-2.5 border" style={{ background: R.shortfall > 0 ? "#FFF7F6" : "#E4F1EA", borderColor: R.shortfall > 0 ? "#E4B3AE" : "#B3D9C3" }}>
+              <div className="text-[9px] text-[#6B7E86]">{R.shortfall > 0 ? "Shortfall" : "Surplus"}</div>
+              <div className="text-sm font-bold" style={{ color: R.shortfall > 0 ? "#B4463C" : "#2E7D5B" }}>{R.shortfall > 0 ? fmt(R.shortfall) : fmt(R.surplus)}</div>
+            </div>
+            <div className="bg-[#F5F9FA] border border-[#CBD9DC] rounded p-2.5">
+              <div className="text-[9px] text-[#6B7E86]">Funded</div>
+              <div className="text-sm font-bold text-[#0F3A46]">{R.fundedPct}%</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 mb-3">
+            <KV k="Current monthly expense" v={fmt(R.currentMonthlyExpense) + "/mo"} />
+            <KV k={`Retirement expense today (${R.replacementPct}% replacement)`} v={fmt(R.retExpenseMonthlyToday) + "/mo"} />
+            <KV k={`Expense at retirement (grown ${R.preRetInflationPct}% p.a.)`} v={fmt(R.monthlyExpenseAtRetirement) + "/mo"} />
+            <KV k="Pension / other income at retirement" v={R.pensionAtRetirement > 0 ? fmt(R.pensionAtRetirement) + "/mo" : "—"} />
+            <KV k="Net first-year draw from corpus" v={fmt(R.netMonthlyExpenseAtRetirement) + "/mo"} />
+            <KV k="Existing earmarked corpus" v={fmt(R.existingCorpus) + (R.existingMonthlySip > 0 ? " + " + fmt(R.existingMonthlySip) + "/mo SIP" : "")} />
+          </div>
+          {R.salaried && (
+            <div className="bg-[#F5F9FA] border border-[#E7EFEF] rounded p-2.5 mb-3">
+              <div className="text-[10px] font-semibold text-[#175A69] uppercase tracking-wide mb-1">EPF accumulation (salaried)</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5 text-[10px] text-[#334E56]">
+                <span>Balance now: <strong className="text-[#0F3A46]">{fmt(R.epfBalance)}</strong></span>
+                <span>Contribution: <strong className="text-[#0F3A46]">{fmt(R.epfMonthlyContribution)}/mo</strong></span>
+                <span>Salary growth: <strong className="text-[#0F3A46]">{R.epfSalaryGrowthPct}%</strong></span>
+                <span>EPF rate: <strong className="text-[#0F3A46]">{R.epfRatePct}%</strong></span>
+              </div>
+              <div className="text-[11px] text-[#0F3A46] mt-1">Projected EPF corpus by retirement: <strong>{fmt(R.epfCorpusAtRetirement)}</strong> (already counted in the projected corpus above).</div>
+            </div>
+          )}
+          <div className="rounded px-3 py-2 text-[11px] border mb-3" style={{ background: R.shortfall > 0 ? "#FFF7F6" : "#E4F1EA", borderColor: R.shortfall > 0 ? "#E4B3AE" : "#B3D9C3" }}>
+            {R.shortfall > 0 ? (
+              <span>To close the <strong>{fmt(R.shortfall)}</strong> shortfall by retirement: an additional SIP of <strong className="text-[#B4463C]">{fmt(R.requiredMonthlySip)}/mo</strong>, or a one-time lumpsum today of <strong className="text-[#8A6D1C]">{fmt(R.requiredLumpsumToday)}</strong>.</span>
+            ) : (
+              <span>On track — the projected corpus exceeds the requirement by <strong className="text-[#2E7D5B]">{fmt(R.surplus)}</strong>. No additional retirement SIP is required at the current assumptions.</span>
+            )}
+          </div>
+          <div className="text-[10px] font-semibold text-[#175A69] uppercase tracking-wide mb-1">
+            Corpus drawdown schedule (5-year intervals)
+            {R.runsOutAtAge != null ? <span className="text-[#B4463C] font-semibold"> · corpus runs out at age {R.runsOutAtAge}</span> : null}
+          </div>
+          <table className="w-full text-[10px] border-collapse mb-2">
+            <thead>
+              <tr className="bg-[#0F3A46] text-[#A9CDD4]">
+                <th className="text-left px-2 py-0.5 font-medium">Age</th>
+                <th className="text-right px-2 py-0.5 font-medium">Annual withdrawal</th>
+                <th className="text-right px-2 py-0.5 font-medium">Corpus balance (start of year)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {R.depletion.filter((_row, i) => i % 5 === 0 || i === R.depletion.length - 1).map((row, i) => (
+                <tr key={i} className={i % 2 ? "bg-white" : "bg-[#FAFCFC]"}>
+                  <td className="px-2 py-0.5 text-[#0F3A46]">{row.age}</td>
+                  <td className="px-2 py-0.5 text-right text-[#334E56]">{fmt(row.withdrawal)}</td>
+                  <td className="px-2 py-0.5 text-right font-medium" style={{ color: row.corpusStart > 0 ? "#0F3A46" : "#B4463C" }}>{row.corpusStart > 0 ? fmt(row.corpusStart) : "depleted"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[9px] text-[#6B7E86]">
+            Assumptions — inflation {R.preRetInflationPct}% p.a. pre-retirement / {R.postRetInflationPct}% in retirement; return {R.accumulationReturnPct}% p.a. while accumulating / {R.postRetReturnPct}% p.a. on the corpus in retirement; planning life expectancy age {R.lifeExpectancy}. Pension is taken at its stated value at retirement. Figures are indicative; actual outcomes vary with markets, contributions and longevity.
+          </p>
+        </Section>
+        ); })()}
+
         <Section num="8" title={`RECOMMENDED STRATEGIC ASSET ALLOCATION${d.isSaaOverridden ? " (adviser-customised)" : ""}`}>
           <div className="grid grid-cols-2 gap-6 mb-4">
             <div>
