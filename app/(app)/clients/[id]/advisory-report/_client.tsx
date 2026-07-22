@@ -86,8 +86,9 @@ function fmt(n: number | null | undefined) {
 function Section({ num, title, children }: { num: string; title: string; children: React.ReactNode }) {
   return (
     <section className="break-inside-avoid">
-      <div className="bg-[#0F3A46] text-white px-4 py-2 rounded-t-lg print:rounded-none">
-        <h2 className="text-sm font-semibold">{num}.  {title}</h2>
+      <div className="flex items-center gap-2.5 bg-[#0F3A46] text-white px-4 py-2.5 rounded-t-lg print:rounded-none border-b-2 border-[#C39A38]">
+        <span className="inline-flex items-center justify-center min-w-[22px] h-[18px] px-1 rounded bg-[#C39A38] text-[#0F3A46] text-[11px] font-bold shrink-0">{num}</span>
+        <h2 className="text-sm font-semibold tracking-wide">{title}</h2>
       </div>
       <div className="border border-t-0 border-[#CBD9DC] rounded-b-lg px-5 py-4">{children}</div>
     </section>
@@ -247,17 +248,33 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
     <div>
       {/* Print isolation: hide app chrome, show only the report */}
       <style>{`
+        #advisory-report {
+          font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+          color: #1F3A42; line-height: 1.5;
+          -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        }
+        #advisory-report h1, #advisory-report h2, #advisory-report h3, #advisory-report .font-serif {
+          font-family: Georgia, "Times New Roman", "Noto Serif", serif;
+        }
+        #advisory-report table { font-variant-numeric: tabular-nums; }
+        #advisory-report td, #advisory-report th { font-variant-numeric: tabular-nums; }
+        .report-footer { display: none; }
         @media print {
           body * { visibility: hidden !important; }
           #advisory-report, #advisory-report * { visibility: visible !important; }
           #advisory-report {
-            position: absolute !important;
-            left: 0 !important; top: 0 !important;
-            width: 100% !important;
-            margin: 0 !important; padding: 0 !important;
+            position: absolute !important; left: 0 !important; top: 0 !important;
+            width: 100% !important; margin: 0 !important; padding: 0 0 12mm 0 !important;
             border: none !important; border-radius: 0 !important;
           }
-          @page { size: A4; margin: 12mm; }
+          section, .break-inside-avoid { break-inside: avoid; }
+          .report-footer {
+            display: flex !important; position: fixed; bottom: 0; left: 0; right: 0;
+            justify-content: space-between; align-items: center; gap: 8px;
+            font-size: 7.5pt; color: #6B7E86; background: #ffffff;
+            border-top: 0.75pt solid #C39A38; padding: 3pt 1pt 0;
+          }
+          @page { size: A4; margin: 13mm 12mm 14mm 12mm; }
         }
       `}</style>
       {/* Action bar */}
@@ -299,6 +316,10 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
                 Date: {d.today} · Status: CONFIDENTIAL
               </p>
             </div>
+          </div>
+          <div className="mt-3 flex items-end justify-between gap-4 border-t border-[#EEF4F5] pt-2.5">
+            <p className="text-[#0F3A46]"><span className="text-[10px] uppercase tracking-widest text-[#6B7E86]">Prepared for</span><br/><span className="font-serif text-lg font-bold">{d.client.full_name}</span>{d.client.client_code ? <span className="text-[11px] text-[#6B7E86]"> · UCC {d.client.client_code}</span> : null}</p>
+            <p className="text-right text-[10px] uppercase tracking-widest text-[#6B7E86]">Risk profile<br/><span className="normal-case tracking-normal text-sm font-semibold text-[#0F3A46]">{d.analysis.activeProfile}</span></p>
           </div>
           <p className="text-[10px] text-[#6B7E86] mt-3">
             Prepared pursuant to the SEBI (Investment Advisers) Regulations, 2013 — risk profiling (Reg. 16) and suitability (Reg. 17).
@@ -915,6 +936,12 @@ export default function AdvisoryReportClient({ clientId, data }: { clientId: str
             System-generated from questionnaire data, live portfolio records and adviser inputs — Fiduciary Cloud · CONFIDENTIAL — for the named client only.
           </p>
           <p className="text-[8px] text-[#6B7E86] text-right">Next review: {notes.next_review_date || d.nextReviewDefault}</p>
+        </div>
+
+        {/* Repeating footer — shows on every printed page */}
+        <div className="report-footer">
+          <span>{d.firm.firm_name ?? "Investment Adviser"} · SEBI {d.firm.sebi_regn ?? "INA_________"}</span>
+          <span>Strictly Private &amp; Confidential · {d.docId}</span>
         </div>
       </div>
     </div>
