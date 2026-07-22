@@ -79,14 +79,18 @@ export const BUCKET_CLASSES: Record<GoalBucket, string[]> = {
 // that serve the goal's horizon bucket (short -> Debt, medium -> Debt/Hybrid/Gold,
 // long -> Equity/Intl/Gold/Alternate), using the adviser's return assumptions.
 export function goalExpectedReturn(
-  targetYear: number | null,
+  _targetYear: number | null,
   saa: Record<string, number>,
   a: Assumptions = DEFAULT_ASSUMPTIONS,
-  thisYear: number = new Date().getFullYear()
+  _thisYear: number = new Date().getFullYear()
 ): number {
-  const years = (targetYear ?? thisYear + 5) - thisYear;
-  const bucket: GoalBucket = years <= 3 ? "short" : years <= 7 ? "medium" : "long";
-  return blendedReturn(saa, a, BUCKET_CLASSES[bucket]);
+  // Expected portfolio return = SAA-weighted blend of ALL asset-class returns,
+  // so every return the adviser sets (equity, debt, gold, international,
+  // alternate) feeds into the goal projection in proportion to the client's
+  // strategic allocation. (Previously blended only the classes serving the
+  // goal's horizon bucket, which excluded Debt from long-dated goals so a debt
+  // return change had no effect on them.)
+  return blendedReturn(saa, a);
 }
 
 const BUCKET_CATEGORIES: Record<GoalBucket, string[]> = {
@@ -208,7 +212,7 @@ export function buildAllocationPlan(
     for (const g of bGoals) {
       const years   = Math.max(1, (g.target_year ?? THIS_YEAR + 5) - THIS_YEAR);
       const infl    = g.inflation_pct ?? a.inflation;
-      const ret     = g.return_pct ?? blendedReturn(assetAllocation, a, BUCKET_CLASSES[bucket]);
+      const ret     = g.return_pct ?? blendedReturn(assetAllocation, a);
       const fv      = futureValue(g.cost_today ?? 0, years, infl);
       const sip     = sipRequired(fv, g.saved ?? 0, years, ret);
       bucketRequired += fv;
@@ -246,7 +250,7 @@ export function buildAllocationPlan(
     for (const g of bGoals) {
       const years  = Math.max(1, (g.target_year ?? THIS_YEAR + 5) - THIS_YEAR);
       const infl   = g.inflation_pct ?? a.inflation;
-      const ret    = g.return_pct ?? blendedReturn(assetAllocation, a, BUCKET_CLASSES[bucket]);
+      const ret    = g.return_pct ?? blendedReturn(assetAllocation, a);
       const fv     = futureValue(g.cost_today ?? 0, years, infl);
       const sip    = sipRequired(fv, g.saved ?? 0, years, ret);
 
