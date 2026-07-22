@@ -5,6 +5,7 @@ import { goalCalc, profileFromAnswers, type GoalRow, type RiskAnswer } from "@/l
 import { BASE_ALLOCATION, goalExpectedReturn } from "@/lib/allocationEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import { resolveAssumptions } from "@/lib/assumptions";
+import RetirementPlanner from "./_retirement";
 
 const THIS_YEAR = new Date().getFullYear();
 
@@ -32,7 +33,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     supabase.from("clients").select("full_name, dob, risk_override, allocation_overrides").eq("client_id", id).single(),
     supabase.from("goals").select("*").eq("client_id", id).order("target_year"),
     supabase.from("risk_answers").select("question_num, answer").eq("client_id", id),
-    supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual").eq("client_id", id).maybeSingle(),
+    supabase.from("financial_facts").select("income_self, income_spouse, income_other, expenses_annual, retirement_age, life_expectancy, ret_pension, epf_nps_corpus, ret_expenses, retirement_replacement_pct").eq("client_id", id).maybeSingle(),
     supabase.from("portfolio_positions").select("goal_id, status, executed_lumpsum, executed_sip, current_value, executed_at").eq("client_id", id),
     supabase.from("portfolio_holdings").select("current_value, lumpsum_invested, monthly_sip, added_at").eq("client_id", id),
   ]);
@@ -82,6 +83,40 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   const totalExtraSip   = calcs.reduce((s, { c }) => s + c.extraSip, 0);
   const totalLumpsumNow = calcs.reduce((s, x) => s + x.lumpsumNow, 0);
 
+  // ── Retirement corpus planner inputs (drawdown model) ─────────────────────
+  const dob = client.dob ? new Date(client.dob as string) : null;
+  const _now = new Date();
+  let currentAge = 35;
+  if (dob && !Number.isNaN(dob.getTime())) {
+    currentAge = _now.getFullYear() - dob.getFullYear() - (_now < new Date(_now.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0);
+  }
+  const retirementAge = Number(facts?.retirement_age ?? 60);
+  const lifeExpectancy = Number(facts?.life_expectancy ?? A.lifeExpectancy);
+  const impliedRepl = facts?.ret_expenses && facts?.expenses_annual
+    ? Math.round((Number(facts.ret_expenses) * 12) / Number(facts.expenses_annual) * 100) : null;
+  const replacementPct = facts?.retirement_replacement_pct != null
+    ? Number(facts.retirement_replacement_pct)
+    : (impliedRepl != null && impliedRepl >= 30 && impliedRepl <= 130 ? impliedRepl : A.replacementPct);
+  const retYear = THIS_YEAR + Math.max(0, retirementAge - currentAge);
+  const accReturn = goalExpectedReturn(retYear, saa, A, THIS_YEAR);
+  const retGoal = goals.find(g => /retire/i.test(g.goal_name ?? ""));
+  const retLive = retGoal ? (liveByGoal[retGoal.goal_id] ?? { liveSaved: 0, liveSip: 0 }) : { liveSaved: 0, liveSip: 0 };
+  const existingRetSip = retGoal ? (retGoal.monthly_sip ?? 0) + retLive.liveSip : 0;
+  const retirementBase = {
+    currentAge, retirementAge, lifeExpectancy,
+    currentMonthlyExpense: Math.round(expenses),
+    replacementPct,
+    inflationPct: A.inflation,
+    accumulationReturnPct: Math.round(accReturn * 10) / 10,
+    postRetReturnPct: A.postRetReturn,
+    monthlyPensionNow: Number(facts?.ret_pension ?? 0),
+    existingCorpus: Number(facts?.epf_nps_corpus ?? 0),
+    existingMonthlySip: Math.round(existingRetSip),
+    defLifeExpectancy: A.lifeExpectancy,
+    defReplacementPct: A.replacementPct,
+    defPostRet: A.postRetReturn,
+  };
+
   const FUNDED_COLOR  = "#2E7D5B";
   const PARTIAL_COLOR = "#C39A38";
   const GAP_COLOR     = "#B4463C";
@@ -114,6 +149,9 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
           <div className="text-[10px] text-[#6B7E86] mt-0.5">invest now instead of extra SIP</div>
         </div>
       </div>
+
+      {/* Retirement corpus planner — settable life expectancy, drawdown model */}
+      <RetirementPlanner clientId={id} base={retirementBase} />
 
       {goals.length === 0 ? (
         <div className="bg-white border border-[#CBD9DC] rounded-xl p-8 text-center">
