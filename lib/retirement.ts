@@ -24,7 +24,7 @@ export interface RetirementInput {
   postRetInflationPct: number;     // inflation during the drawdown years
   accumulationReturnPct: number;   // return while accumulating (pre-retirement)
   postRetReturnPct: number;        // return the corpus earns during drawdown
-  monthlyPensionNow: number;       // today's money — pension / other retirement income
+  pensionAtRetirement: number;     // expected monthly pension AT retirement (nominal, that year's value)
   existingCorpus: number;          // non-EPF corpus earmarked, grows at accumulation return
   existingMonthlySip: number;      // ongoing SIP toward retirement
   // EPF (salaried only) — contributions grow with salary and earn the EPF rate
@@ -71,7 +71,7 @@ export function retirementCorpus(inp: RetirementInput): RetirementResult {
   // 1 & 2 — retirement expense today, grown to the retirement date.
   const retExpToday = inp.currentMonthlyExpense * (inp.replacementPct / 100);
   const monthlyExpAtR = retExpToday * Math.pow(1 + iPre, yearsToRet);
-  const monthlyPenAtR = inp.monthlyPensionNow * Math.pow(1 + iPre, yearsToRet);
+  const monthlyPenAtR = inp.pensionAtRetirement;   // stated at the retirement date — not grown from today
   const netMonthly = Math.max(0, monthlyExpAtR - monthlyPenAtR);
 
   // 3 — corpus = PV of the inflation-linked monthly draw at the real rate.

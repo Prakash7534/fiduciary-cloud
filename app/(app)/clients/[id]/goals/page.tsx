@@ -120,7 +120,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     postRetInflationPct: A.postRetInflation,
     accumulationReturnPct: Math.round(accReturn * 10) / 10,
     postRetReturnPct: A.postRetReturn,
-    monthlyPensionNow: Number(facts?.ret_pension ?? 0),
+    pensionAtRetirement: Number(facts?.ret_pension ?? 0),
     existingCorpus: nonEpfCorpus,
     existingMonthlySip: Math.round(existingRetSip),
     salaried,

@@ -21,7 +21,7 @@ export interface RetirementBase {
   postRetInflationPct: number;
   accumulationReturnPct: number;
   postRetReturnPct: number;
-  monthlyPensionNow: number;
+  pensionAtRetirement: number;
   existingCorpus: number;
   existingMonthlySip: number;
   defLifeExpectancy: number;
@@ -78,7 +78,7 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
   const [postInfl, setPostInfl]           = useState(base.postRetInflationPct);
   const [accReturn, setAccReturn]         = useState(base.accumulationReturnPct);
   const [postRet, setPostRet]             = useState(base.postRetReturnPct);
-  const [pension, setPension]             = useState(base.monthlyPensionNow);
+  const [pension, setPension]             = useState(base.pensionAtRetirement);
   const [corpus, setCorpus]               = useState(base.existingCorpus);
   const [existingSip, setExistingSip]     = useState(base.existingMonthlySip);
   const [salaried, setSalaried]           = useState(base.salaried);
@@ -101,7 +101,7 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
     currentMonthlyExpense: curExpense, replacementPct: replacement,
     preRetInflationPct: preInfl, postRetInflationPct: postInfl,
     accumulationReturnPct: accReturn, postRetReturnPct: postRet,
-    monthlyPensionNow: pension, existingCorpus: corpus, existingMonthlySip: existingSip,
+    pensionAtRetirement: pension, existingCorpus: corpus, existingMonthlySip: existingSip,
     salaried, epfBalance, epfMonthlyContribution: epfContribution,
     epfRatePct: epfRate, epfSalaryGrowthPct: salaryGrowth,
   }), [currentAge, retirementAge, lifeExpectancy, curExpense, replacement, preInfl, postInfl, accReturn, postRet, pension, corpus, existingSip, salaried, epfBalance, epfContribution, epfRate, salaryGrowth]);
@@ -197,7 +197,7 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
               <NumField label="Current expense" unit="₹/mo" value={curExpense} onChange={setCurExpense} step={1000} />
               <NumField label="Replacement" unit="%" value={replacement} onChange={setReplacement}
                 hint={`${replacement}% of current expense`} />
-              <NumField label="Pension / other" unit="₹/mo" value={pension} onChange={setPension} step={1000} hint="in today's money" />
+              <NumField label="Pension at retirement" unit="₹/mo" value={pension} onChange={setPension} step={1000} hint="expected ₹/mo at retirement (not today's value)" />
               <div />
             </div>
             {salaried && (
