@@ -164,6 +164,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
   const otherLumpsum  = calcs.reduce((s, x) => s + (x.g.goal_id === retGoalId ? 0 : x.lumpsumNow), 0);
   const initialRetSip     = retResult?.requiredMonthlySip ?? 0;
   const initialRetLumpsum = retResult?.requiredLumpsumToday ?? 0;
+  const listCalcs = calcs.filter(x => x.g.goal_id !== retGoalId);
 
   const FUNDED_COLOR  = "#2E7D5B";
   const PARTIAL_COLOR = "#C39A38";
@@ -183,7 +184,14 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
         </div>
       ) : (
         <div className="space-y-4">
-          {calcs.map(({ g, c, gret, lumpsumNow, liveSaved, liveSip, ret }, i) => {
+          {retGoal && (
+            <div className="bg-[#F5F9FA] border border-[#CBD9DC] rounded-xl px-4 py-2.5 text-xs text-[#6B7E86]">
+              <strong className="text-[#0F3A46]">Retirement</strong> is shown in the corpus planner above ↑ — its required SIP &amp; lumpsum are live there and already included in the totals.
+            </div>
+          )}
+          {listCalcs.length === 0 ? (
+            <div className="bg-white border border-[#CBD9DC] rounded-xl p-6 text-center text-sm text-[#6B7E86]">No other goals recorded yet.</div>
+          ) : listCalcs.map(({ g, c, gret, lumpsumNow, liveSaved, liveSip, ret }, i) => {
             const fundedPct = c.fv > 0 ? Math.min(100, (c.path / c.fv) * 100) : 100;
             const isFunded = c.gap === 0;
             const barColor = fundedPct >= 90 ? FUNDED_COLOR : fundedPct >= 50 ? PARTIAL_COLOR : GAP_COLOR;
