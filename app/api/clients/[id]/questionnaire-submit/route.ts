@@ -205,6 +205,8 @@ export async function POST(
     fnum("epf_nps_corpus","epf_nps_corpus"); fnum("ret_exp","ret_expenses"); fnum("ret_pension","ret_pension");
     const ra = num(getField("retage_from_b6")) ?? num(getField("retage_self")); if (ra != null) ff.retirement_age = Math.round(ra);
     const le = num(getField("life_expectancy")); if (le != null) ff.life_expectancy = Math.round(le);
+    const bp = num(getField("epf_basic_salary")); if (bp != null) ff.epf_basic_salary = bp;
+    if (isChecked("is_salaried")) ff.is_salaried = true;
     ftext("var_pay","var_pay"); ftext("prop_count","prop_count"); ftext("property_plan","property_plan");
     ftext("income_growth_pct","income_growth_pct"); ftext("large_inflows","large_inflows"); ftext("large_expenses","large_expenses");
     ftext("medical_commitments","medical_commitments"); ftext("adviser_notes_misc","adviser_notes_misc");

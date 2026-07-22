@@ -135,6 +135,8 @@ export function mapToFinancialFacts(m: RawFields) {
     // B6 — other
     retirement_age:       num(m["retage_self"]) ?? num(m["retage_from_b6"]),
     life_expectancy:      num(m["life_expectancy"]),
+    is_salaried:          !!m["is_salaried"],
+    epf_basic_salary:     num(m["epf_basic_salary"]),
     income_growth_pct:    (m["income_growth_pct"] as string) ?? null,
     large_inflows:        (m["large_inflows"] as string) ?? null,
     large_expenses:       (m["large_expenses"] as string) ?? null,

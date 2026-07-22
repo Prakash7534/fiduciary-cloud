@@ -229,6 +229,8 @@ export default async function BlankFormPage({ params }: { params: Promise<{ id: 
             <Line label="Total life insurance cover (₹ sum assured)" />
             <Line label="Target retirement age" />
             <Line label="Planned life expectancy (age)" />
+            <Line label="Salaried? (EPF applies)" />
+            <Line label="Monthly basic pay (₹)" />
           </TwoCol>
           <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 8 }}>
             {[
