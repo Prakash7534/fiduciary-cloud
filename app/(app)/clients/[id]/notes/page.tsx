@@ -5,7 +5,10 @@ import {
   analyseClient, financialPosition, scoreAnswers, goalCalc,
   type FinancialFacts, type LoanRow, type InvestmentRow, type RiskAnswer, type GoalRow,
 } from "@/lib/riskEngine";
-import { BASE_ALLOCATION } from "@/lib/allocationEngine";
+import { BASE_ALLOCATION, goalExpectedReturn } from "@/lib/allocationEngine";
+import { totalRequiredSip } from "@/lib/goalSip";
+import { buildRetirementInput, isRetirementGoal } from "@/lib/retirementInput";
+import { retirementCorpus } from "@/lib/retirement";
 import { buildGapPlan, currentValueByClass } from "@/lib/constructionEngine";
 import { computeGoalLiveAmounts } from "@/lib/goalNetting";
 import { buildAdvisoryAssist, type AdvisoryAssistInput } from "@/lib/advisoryNotes";
@@ -92,15 +95,27 @@ export default async function AdvisoryNotesPage({ params }: { params: Promise<{ 
     monthly_sip: (h.monthly_sip as number | null) ?? null, added_at: (h.added_at as string | null) ?? null,
   }));
   const live = computeGoalLiveAmounts(goals, posNet, holdNet, THIS_YEAR, A);
-  let totalExtraSip = 0, totalLumpsumNow = 0;
+  // Drawdown + EPF aware and SAA-blended — same figures as the Goal Calculator,
+  // Asset Allocation, Portfolio Construction and Advisory Report.
+  const retGoal = goals.find(isRetirementGoal);
+  const retResult = retGoal
+    ? retirementCorpus(buildRetirementInput(facts as Record<string, unknown> | null, (client.dob as string | null) ?? null, goals, live[retGoal.goal_id]?.liveSip ?? 0, saa, A, THIS_YEAR))
+    : null;
+  const totalExtraSip = totalRequiredSip(goals, (positions ?? []) as Record<string, unknown>[], (holdings ?? []) as Record<string, unknown>[], saa, A, THIS_YEAR, facts as Record<string, unknown> | null, (client.dob as string | null) ?? null);
+  let totalLumpsumNow = 0;
   const goalItems = goals.map(g => {
     const l = live[g.goal_id] ?? { liveSaved: 0, liveSip: 0 };
     const gLive = { ...g, saved: (g.saved ?? 0) + l.liveSaved, monthly_sip: (g.monthly_sip ?? 0) + l.liveSip };
-    const c = goalCalc(gLive, THIS_YEAR, A);
-    const r = (g.return_pct ?? 10) / 100;
-    totalExtraSip += c.extraSip;
-    totalLumpsumNow += c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + r, c.years) : 0;
-    return { name: g.goal_name ?? "Goal", fundedPct: c.fv > 0 ? Math.min(100, Math.round(c.path / c.fv * 100)) : 100, gap: Math.round(c.gap), targetYear: g.target_year };
+    const gret = g.return_pct ?? goalExpectedReturn(g.target_year, saa, A, THIS_YEAR);
+    const c = goalCalc(gLive, THIS_YEAR, { ...A, defaultGoalReturn: gret });
+    const rr = gret / 100;
+    const isRet = !!retGoal && g.goal_id === retGoal.goal_id;
+    let lumpsum = c.gap > 0 && c.years > 0 ? c.gap / Math.pow(1 + rr, c.years) : 0;
+    let fundedPct = c.fv > 0 ? Math.min(100, Math.round(c.path / c.fv * 100)) : 100;
+    let gap = Math.round(c.gap);
+    if (isRet && retResult) { lumpsum = retResult.requiredLumpsumToday; fundedPct = retResult.fundedPct > 100 ? 100 : retResult.fundedPct; gap = retResult.shortfall; }
+    totalLumpsumNow += lumpsum;
+    return { name: g.goal_name ?? "Goal", fundedPct, gap, targetYear: g.target_year };
   });
 
   const f = (facts ?? {}) as Record<string, unknown>;
