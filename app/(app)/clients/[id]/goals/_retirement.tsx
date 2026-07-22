@@ -88,11 +88,14 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
   const [epfBalance, setEpfBalance]       = useState(base.epfBalance);
   const [epfRate, setEpfRate]             = useState(base.epfRatePct);
   const [salaryGrowth, setSalaryGrowth]   = useState(base.epfSalaryGrowthPct);
+  const [epsService, setEpsService]       = useState(Math.min(35, Math.max(0, base.retirementAge - base.currentAge)));
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
 
   const epfContribution = Math.round(epfBasic * (epfEmpPct + epfEmprPct) / 100);
+  const epsRaw = Math.min(epfBasic, 15000) * Math.min(Math.max(epsService, 0), 35) / 70;
+  const epsPension = epsService >= 10 ? Math.min(7500, Math.max(1000, Math.round(epsRaw))) : 0;
   const inp: RetirementInput = useMemo(() => ({
     currentAge, retirementAge, lifeExpectancy,
     currentMonthlyExpense: curExpense, replacementPct: replacement,
@@ -197,6 +200,25 @@ export default function RetirementPlanner({ clientId, base, onResult }: { client
               <NumField label="Pension / other" unit="₹/mo" value={pension} onChange={setPension} step={1000} hint="in today's money" />
               <div />
             </div>
+            {salaried && (
+              <div className="mt-2 bg-white border border-[#CBD9DC] rounded-lg p-2.5">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-[10px] font-semibold text-[#175A69] uppercase tracking-wide">EPS pension estimate</span>
+                  <button type="button" disabled={epsPension === 0} onClick={() => { setPension(epsPension); setSaved(false); }}
+                    className="text-[10px] font-medium text-white bg-[#175A69] hover:bg-[#0F3A46] rounded px-2 py-0.5 disabled:opacity-40">
+                    Use {fmt0(epsPension)}/mo
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-[#6B7E86] flex-wrap">
+                  <span>min(basic, ₹15,000) ×</span>
+                  <input type="number" value={epsService} onChange={e => setEpsService(e.target.value === "" ? 0 : Number(e.target.value))}
+                    className="w-12 border border-[#CBD9DC] rounded px-1 py-0.5 text-[#0F3A46] outline-none focus:border-[#175A69]" />
+                  <span>yrs service ÷ 70 =</span>
+                  <strong className="text-[#0F3A46]">{epsPension > 0 ? fmt0(epsPension) + "/mo" : "not eligible (<10 yrs)"}</strong>
+                </div>
+                <p className="text-[9px] text-[#6B7E86] mt-1">EPS needs 10+ yrs service; capped ₹1,000–₹7,500/mo. It&apos;s separate from the EPF corpus — set Employer share to 3.67% above if you count EPS here, else leave 12% and skip EPS (avoids double-counting).</p>
+              </div>
+            )}
           </div>
 
           <div>
