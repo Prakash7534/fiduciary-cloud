@@ -15,7 +15,8 @@ export interface Assumptions {
   international: number;      // % p.a. — assumed return on International
   alternate: number;         // % p.a. — assumed return on Alternate (REITs/AIF/InvIT)
   hybrid: number;            // % p.a. — assumed return on Hybrid
-  postRetReturn: number;     // % p.a. — conservative return during retirement drawdown
+  postRetReturn: number;     // % p.a. — conservative return the corpus earns during retirement drawdown
+  postRetInflation: number;  // % p.a. — inflation during the retirement (drawdown) years
   lifeExpectancy: number;    // years — default planning life expectancy
   replacementPct: number;    // % — retirement expenses as a share of current expenses
 }
@@ -33,8 +34,9 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   alternate: 10,
   hybrid: 9,
   postRetReturn: 8,
+  postRetInflation: 6,
   lifeExpectancy: 85,
-  replacementPct: 75,
+  replacementPct: 60,
 };
 
 // Labels + which firm_settings column backs each field (used by the Settings UI).
@@ -68,6 +70,7 @@ export function resolveAssumptions(firm: Record<string, unknown> | null | undefi
     alternate:         num(f.assume_alternate,   DEFAULT_ASSUMPTIONS.alternate),
     hybrid:            num(f.assume_hybrid,      DEFAULT_ASSUMPTIONS.hybrid),
     postRetReturn:     num(f.assume_post_ret_return, DEFAULT_ASSUMPTIONS.postRetReturn),
+    postRetInflation:  num(f.assume_post_ret_inflation, DEFAULT_ASSUMPTIONS.postRetInflation),
     lifeExpectancy:    num(f.assume_life_expectancy, DEFAULT_ASSUMPTIONS.lifeExpectancy),
     replacementPct:    num(f.assume_replacement_pct, DEFAULT_ASSUMPTIONS.replacementPct),
   };

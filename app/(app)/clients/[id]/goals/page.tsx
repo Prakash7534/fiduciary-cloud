@@ -106,7 +106,8 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     currentAge, retirementAge, lifeExpectancy,
     currentMonthlyExpense: Math.round(expenses),
     replacementPct,
-    inflationPct: A.inflation,
+    preRetInflationPct: A.inflation,
+    postRetInflationPct: A.postRetInflation,
     accumulationReturnPct: Math.round(accReturn * 10) / 10,
     postRetReturnPct: A.postRetReturn,
     monthlyPensionNow: Number(facts?.ret_pension ?? 0),
@@ -115,6 +116,7 @@ export default async function GoalCalculatorPage({ params }: { params: Promise<{
     defLifeExpectancy: A.lifeExpectancy,
     defReplacementPct: A.replacementPct,
     defPostRet: A.postRetReturn,
+    defPostRetInflation: A.postRetInflation,
   };
 
   const FUNDED_COLOR  = "#2E7D5B";

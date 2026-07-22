@@ -9,7 +9,7 @@ const IDENTITY = [
 const ASSUMPTIONS = [
   "assume_inflation", "assume_goal_return", "assume_equity", "assume_debt",
   "assume_gold", "assume_intl", "assume_alternate", "assume_hybrid",
-  "assume_post_ret_return", "assume_life_expectancy", "assume_replacement_pct",
+  "assume_post_ret_return", "assume_post_ret_inflation", "assume_life_expectancy", "assume_replacement_pct",
 ];
 
 export async function POST(req: NextRequest) {

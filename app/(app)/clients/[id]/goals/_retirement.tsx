@@ -9,6 +9,7 @@ function fmtCr(n: number) {
   if (Math.abs(v) >= 100_000)    return `₹${(v / 100_000).toFixed(2)} L`;
   return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
+const fmt0 = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 export interface RetirementBase {
   currentAge: number;
@@ -16,23 +17,24 @@ export interface RetirementBase {
   lifeExpectancy: number;
   currentMonthlyExpense: number;
   replacementPct: number;
-  inflationPct: number;
+  preRetInflationPct: number;
+  postRetInflationPct: number;
   accumulationReturnPct: number;
   postRetReturnPct: number;
   monthlyPensionNow: number;
   existingCorpus: number;
   existingMonthlySip: number;
-  // display-only defaults
   defLifeExpectancy: number;
   defReplacementPct: number;
   defPostRet: number;
+  defPostRetInflation: number;
 }
 
-function NumField({ label, unit, value, onChange, step = 1, hint, wide }: {
-  label: string; unit?: string; value: number; onChange: (n: number) => void; step?: number; hint?: string; wide?: boolean;
+function NumField({ label, unit, value, onChange, step = 1, hint }: {
+  label: string; unit?: string; value: number; onChange: (n: number) => void; step?: number; hint?: string;
 }) {
   return (
-    <div className={wide ? "sm:col-span-2" : ""}>
+    <div>
       <label className="text-[11px] font-medium text-[#0F3A46] block mb-1">
         {label}{unit ? <span className="text-[#6B7E86] font-normal"> ({unit})</span> : null}
       </label>
@@ -46,6 +48,15 @@ function NumField({ label, unit, value, onChange, step = 1, hint, wide }: {
   );
 }
 
+function Row({ k, v, strong }: { k: React.ReactNode; v: React.ReactNode; strong?: boolean }) {
+  return (
+    <div className={`flex items-baseline justify-between gap-3 py-1.5 border-b border-[#EEF3F4] last:border-0 ${strong ? "font-semibold text-[#0F3A46]" : ""}`}>
+      <span className="text-[11px] text-[#6B7E86]">{k}</span>
+      <span className={`text-xs ${strong ? "text-[#0F3A46]" : "text-[#334E56]"} text-right`}>{v}</span>
+    </div>
+  );
+}
+
 export default function RetirementPlanner({ clientId, base }: { clientId: string; base: RetirementBase }) {
   const router = useRouter();
 
@@ -54,7 +65,8 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
   const [lifeExpectancy, setLifeExp]      = useState(base.lifeExpectancy);
   const [curExpense, setCurExpense]       = useState(base.currentMonthlyExpense);
   const [replacement, setReplacement]     = useState(base.replacementPct);
-  const [inflation, setInflation]         = useState(base.inflationPct);
+  const [preInfl, setPreInfl]             = useState(base.preRetInflationPct);
+  const [postInfl, setPostInfl]           = useState(base.postRetInflationPct);
   const [accReturn, setAccReturn]         = useState(base.accumulationReturnPct);
   const [postRet, setPostRet]             = useState(base.postRetReturnPct);
   const [pension, setPension]             = useState(base.monthlyPensionNow);
@@ -67,18 +79,16 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
   const inp: RetirementInput = useMemo(() => ({
     currentAge, retirementAge, lifeExpectancy,
     currentMonthlyExpense: curExpense, replacementPct: replacement,
-    inflationPct: inflation, accumulationReturnPct: accReturn, postRetReturnPct: postRet,
+    preRetInflationPct: preInfl, postRetInflationPct: postInfl,
+    accumulationReturnPct: accReturn, postRetReturnPct: postRet,
     monthlyPensionNow: pension, existingCorpus: corpus, existingMonthlySip: existingSip,
-  }), [currentAge, retirementAge, lifeExpectancy, curExpense, replacement, inflation, accReturn, postRet, pension, corpus, existingSip]);
+  }), [currentAge, retirementAge, lifeExpectancy, curExpense, replacement, preInfl, postInfl, accReturn, postRet, pension, corpus, existingSip]);
 
   const r = useMemo(() => retirementCorpus(inp), [inp]);
 
-  // Life-expectancy sensitivity — corpus required at a spread of ages.
   const sens = useMemo(() => {
     const ages = [75, 80, 85, 90, 95, 100].filter(a => a > retirementAge);
-    const rows = ages.map(a => ({ age: a, corpus: retirementCorpus({ ...inp, lifeExpectancy: a }).corpusRequired }));
-    const max = Math.max(1, ...rows.map(x => x.corpus));
-    return { rows, max };
+    return ages.map(a => ({ age: a, corpus: retirementCorpus({ ...inp, lifeExpectancy: a }).corpusRequired }));
   }, [inp, retirementAge]);
 
   const depMax = Math.max(1, ...r.depletion.map(d => d.corpusStart));
@@ -100,6 +110,7 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
 
   const funded = r.fundedPct;
   const fundColor = funded >= 90 ? "#2E7D5B" : funded >= 50 ? "#C39A38" : "#B4463C";
+  const hasPension = pension > 0;
 
   return (
     <div className="bg-white border border-[#CBD9DC] rounded-xl overflow-hidden">
@@ -107,8 +118,8 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
         <div>
           <h2 className="text-sm font-semibold text-white">Retirement corpus planner</h2>
           <p className="text-[11px] text-[#A9CDD4] mt-0.5">
-            Models the post-retirement drawdown — the corpus must fund {r.retirementYears} years of inflation-growing
-            expenses from age {retirementAge} to {lifeExpectancy}.
+            Present-value method — the corpus must fund {r.retirementYears} years of inflation-linked
+            expenses from age {retirementAge} to {lifeExpectancy}, at a real return of {r.realRatePct}% p.a.
           </p>
         </div>
         <button onClick={onSave} disabled={saving}
@@ -149,8 +160,8 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
             <div className="grid grid-cols-2 gap-3">
               <NumField label="Current expense" unit="₹/mo" value={curExpense} onChange={setCurExpense} step={1000} />
               <NumField label="Replacement" unit="%" value={replacement} onChange={setReplacement}
-                hint={`retirement = ${replacement}% of current`} />
-              <NumField label="Pension / other" unit="₹/mo" value={pension} onChange={setPension} step={1000} />
+                hint={`${replacement}% of current expense`} />
+              <NumField label="Pension / other" unit="₹/mo" value={pension} onChange={setPension} step={1000} hint="in today's money" />
               <div />
             </div>
           </div>
@@ -165,11 +176,11 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
 
           <div>
             <div className="text-[11px] font-semibold text-[#175A69] uppercase tracking-wide mb-2">Assumptions</div>
-            <div className="grid grid-cols-3 gap-3">
-              <NumField label="Inflation" unit="%" value={inflation} onChange={setInflation} step={0.1} />
-              <NumField label="Pre-ret return" unit="%" value={accReturn} onChange={setAccReturn} step={0.1} />
-              <NumField label="Post-ret return" unit="%" value={postRet} onChange={setPostRet} step={0.1}
-                hint={`default ${base.defPostRet}%`} />
+            <div className="grid grid-cols-2 gap-3">
+              <NumField label="Inflation — pre-retire" unit="%" value={preInfl} onChange={setPreInfl} step={0.1} />
+              <NumField label="Inflation — in retirement" unit="%" value={postInfl} onChange={setPostInfl} step={0.1} />
+              <NumField label="Return — pre-retire" unit="%" value={accReturn} onChange={setAccReturn} step={0.1} hint="on savings/SIP" />
+              <NumField label="Return — on corpus" unit="%" value={postRet} onChange={setPostRet} step={0.1} hint={`default ${base.defPostRet}%`} />
             </div>
           </div>
         </div>
@@ -178,11 +189,11 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
         <div className="lg:col-span-3 space-y-4">
           {/* Headline */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-[#0F3A46] rounded-lg p-3 col-span-2 sm:col-span-2">
+            <div className="bg-[#0F3A46] rounded-lg p-3 col-span-2">
               <div className="text-[11px] text-[#A9CDD4] mb-1">Corpus required at retirement (age {retirementAge})</div>
               <div className="text-2xl font-bold font-serif text-white">{fmtCr(r.corpusRequired)}</div>
               <div className="text-[10px] text-[#A9CDD4] mt-1">
-                to fund {fmtCr(r.netAnnualExpenseAtRetirement)}/yr (net of pension), growing {inflation}% p.a. for {r.retirementYears} yrs
+                to fund {fmt0(r.netMonthlyExpenseAtRetirement)}/mo{hasPension ? " (net of pension)" : ""}, rising {postInfl}% p.a. for {r.retirementYears} yrs
               </div>
             </div>
             <div className="bg-[#F5F9FA] border border-[#CBD9DC] rounded-lg p-3">
@@ -199,14 +210,10 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
             </div>
           </div>
 
-          {/* Funding bar */}
-          <div>
-            <div className="w-full bg-[#E7EFEF] rounded-full h-2">
-              <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(100, funded)}%`, background: fundColor }} />
-            </div>
+          <div className="w-full bg-[#E7EFEF] rounded-full h-2">
+            <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(100, funded)}%`, background: fundColor }} />
           </div>
 
-          {/* What to do */}
           {r.shortfall > 0 && (
             <div className="flex items-center justify-between flex-wrap gap-2 bg-[#FFF7F6] border border-[#E4B3AE] rounded-lg px-4 py-2.5">
               <div>
@@ -221,12 +228,25 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
             </div>
           )}
 
+          {/* Calculation breakdown — mirrors the standard PV worksheet */}
+          <div className="bg-[#FAFCFC] border border-[#E7EFEF] rounded-lg px-4 py-2">
+            <div className="text-[11px] font-semibold text-[#175A69] uppercase tracking-wide mb-1">How it&apos;s calculated</div>
+            <Row k="Retirement expense today" v={`${fmt0(r.retExpenseMonthlyToday)}/mo (${replacement}% of ${fmt0(curExpense)})`} />
+            <Row k={`Grown ${preInfl}% p.a. for ${r.yearsToRetirement} yrs to retirement`} v={`${fmt0(r.monthlyExpenseAtRetirement)}/mo`} />
+            {hasPension && <Row k="Less pension at retirement" v={`− ${fmt0(r.monthlyPensionAtRetirement)}/mo → ${fmt0(r.netMonthlyExpenseAtRetirement)}/mo net`} />}
+            <Row k={`Real return (1+${postRet}%)/(1+${postInfl}%) − 1`} v={`${r.realRatePct}% p.a.`} />
+            <Row k="Months in retirement (nper)" v={`${r.retirementMonths}`} />
+            <Row strong k={`Corpus = PV(${r.realRatePct}%/12, ${r.retirementMonths}, ${fmt0(r.netMonthlyExpenseAtRetirement)})`} v={fmtCr(r.corpusRequired)} />
+          </div>
+
           {/* Drawdown depletion curve */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <div className="text-[11px] font-semibold text-[#175A69] uppercase tracking-wide">Corpus drawdown</div>
+              <div className="text-[11px] font-semibold text-[#175A69] uppercase tracking-wide">
+                {r.shortfall > 0 ? "Projected corpus drawdown" : "Required corpus drawdown"}
+              </div>
               {r.runsOutAtAge !== null
-                ? <span className="text-[10px] font-semibold text-[#B4463C]">Runs out at age {r.runsOutAtAge}</span>
+                ? <span className="text-[10px] font-semibold text-[#B4463C]">Money runs out at age {r.runsOutAtAge}</span>
                 : <span className="text-[10px] font-semibold text-[#2E7D5B]">Lasts to age {lifeExpectancy} ✓</span>}
             </div>
             <svg viewBox={`0 0 ${Math.max(1, r.depletion.length) * 10} 60`} preserveAspectRatio="none" className="w-full h-16 bg-[#F5F9FA] rounded-lg border border-[#E7EFEF]">
@@ -238,7 +258,7 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
             </svg>
             <div className="flex justify-between text-[10px] text-[#6B7E86] mt-0.5">
               <span>age {retirementAge}</span>
-              <span>the corpus is drawn down as inflation raises each year&apos;s withdrawal</span>
+              <span>corpus is drawn down as inflation raises each year&apos;s withdrawal</span>
               <span>age {lifeExpectancy}</span>
             </div>
           </div>
@@ -249,7 +269,7 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
               Corpus required vs. life expectancy
             </div>
             <div className="grid grid-cols-6 gap-2">
-              {sens.rows.map(({ age, corpus: c }) => {
+              {sens.map(({ age, corpus: c }) => {
                 const active = age === lifeExpectancy;
                 return (
                   <button key={age} onClick={() => setLifeExp(age)}
@@ -261,8 +281,8 @@ export default function RetirementPlanner({ clientId, base }: { clientId: string
               })}
             </div>
             <p className="text-[10px] text-[#6B7E86] mt-2">
-              Living longer means the corpus must cover more inflating years — the reason a life-expectancy assumption
-              materially changes the number. Click an age to apply it.
+              Longevity risk: living longer means the corpus must cover more inflating years, which is why the
+              life-expectancy assumption materially changes the number. Click an age to apply it.
             </p>
           </div>
         </div>
