@@ -344,6 +344,7 @@ export interface ExtendedFacts extends FinancialFacts {
   rent_monthly?: number | null;  // monthly rent paid for own accommodation
   prop_count?: string | null;
   property_plan?: string | null;
+  var_pay?: string | null;       // variable / bonus component, approx % of total income
   covers_held?: string | null;
   nominees_updated?: string | null;
 }
@@ -486,6 +487,11 @@ export interface CashFlowResult {
   annualEmi: number;
   surplus: number | null;
   surplusRatio: number | null; // surplus / totalIncome
+  variablePct: number | null;      // variable/bonus as % of total income
+  variableIncome: number;          // annual variable/bonus portion
+  stableIncome: number;            // annual stable/committed income (total − variable)
+  stableSurplus: number | null;    // stableIncome − expenses − EMI (conservative)
+  stableSurplusRatio: number | null;
 }
 
 export function cashFlow(
@@ -520,9 +526,19 @@ export function cashFlow(
   const surplusRatio =
     totalIncome > 0 && surplus !== null ? surplus / totalIncome : null;
 
+  // Variable / bonus component (approx % of total). Planning leans on the
+  // stable (committed) income; the variable slice is treated as upside.
+  const vRaw = facts?.var_pay != null ? parseFloat(String(facts.var_pay).replace(/[^0-9.]/g, "")) : NaN;
+  const variablePct = Number.isFinite(vRaw) ? Math.min(100, Math.max(0, vRaw)) : null;
+  const variableIncome = variablePct != null ? Math.round(totalIncome * variablePct / 100) : 0;
+  const stableIncome = totalIncome - variableIncome;
+  const stableSurplus = annualExpenses !== null ? stableIncome - annualExpenses - annualEmi : null;
+  const stableSurplusRatio = stableIncome > 0 && stableSurplus !== null ? stableSurplus / stableIncome : null;
+
   return {
     incomeSelf, incomeSpouse, incomeOther, rentalIncome, totalIncome,
     annualExpenses, rentMonthly, emiByType, annualEmi, surplus, surplusRatio,
+    variablePct, variableIncome, stableIncome, stableSurplus, stableSurplusRatio,
   };
 }
 

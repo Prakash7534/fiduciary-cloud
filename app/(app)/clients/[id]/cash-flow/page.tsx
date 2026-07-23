@@ -61,6 +61,12 @@ export default async function CashFlowPage({
               <Row label="Rental income" value={fmt(cf.rentalIncome)} />
             )}
             <Row label="Total income" value={fmt(cf.totalIncome)} bold />
+            {cf.variablePct != null && cf.variablePct > 0 && (
+              <>
+                <Row label={`— of which variable / bonus (~${cf.variablePct}%)`} value={fmt(cf.variableIncome)} muted />
+                <Row label="Stable / committed income" value={fmt(cf.stableIncome)} muted />
+              </>
+            )}
           </tbody>
         </table>
         {cf.totalIncome === 0 && (
@@ -157,6 +163,11 @@ export default async function CashFlowPage({
               </div>
             </div>
           </div>
+          {cf.stableSurplus !== null && cf.variablePct != null && cf.variablePct > 0 && (
+            <p className="text-xs text-[#6B7E86] mt-3">
+              On stable / committed income only (excluding the ~{cf.variablePct}% variable / bonus): surplus {fmt(cf.stableSurplus)} ({pct(cf.stableSurplusRatio)}). Planning leans on this conservative figure.
+            </p>
+          )}
           {cf.surplus < 0 && (
             <p className="text-xs text-[#B4463C] mt-3 font-medium">
               Spending + EMI exceeds income — budget review is urgent before
